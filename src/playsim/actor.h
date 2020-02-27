@@ -470,6 +470,7 @@ enum ActorRenderFlag
 	RF_CASTSPRITESHADOW = 0x20000000,	// actor will cast a sprite shadow
 	RF_NOINTERPOLATEVIEW = 0x40000000,	// don't interpolate the view next frame if this actor is a camera.
 	RF_NOSPRITESHADOW = 0x80000000,		// actor will not cast a sprite shadow
+	RF_INTERPOLATESCALE = 0x100000000,	// allow interpolation of actor's scale
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -1235,6 +1236,7 @@ public:
 	// [RH] Used to interpolate the view to get >35 FPS
 	DVector3 Prev;
 	DRotator PrevAngles;
+	FVector2 PrevScale;
 	int PrevPortalGroup;
 	TArray<FDynamicLight *> AttachedLights;
 	TDeletingArray<FLightDefaults *> UserLights;
@@ -1377,6 +1379,29 @@ public:
 			if (renderflags & RF_INTERPOLATEANGLES) thisang = PrevAngles.Yaw + deltaangle(PrevAngles.Yaw, Angles.Yaw) * ticFrac;
 			else thisang = Angles.Yaw;
 			return viewangle - (thisang + SpriteRotation);
+		}
+	}
+	DVector2 GetSpriteScale(double ticFrac)
+	{
+		if(renderflags & RF_INTERPOLATESCALE)
+		{
+			DVector2 prev(PrevScale.X, PrevScale.Y);
+			return prev + (ticFrac * (Scale - prev));
+		}
+		else
+		{
+			return Scale;
+		}
+	}
+	FVector2 GetSpriteScaleF(double ticFrac)
+	{
+		if (renderflags & RF_INTERPOLATESCALE)
+		{
+			return PrevScale + (float(ticFrac) * (FVector2(float(Scale.X), float(Scale.Y)) - PrevScale));
+		}
+		else
+		{
+			return FVector2(float(Scale.X), float(Scale.Y));
 		}
 	}
 	DVector3 PosPlusZ(double zadd) const

@@ -4796,6 +4796,7 @@ void AActor::CallBeginPlay()
 void AActor::PostBeginPlay ()
 {
 	PrevAngles = Angles;
+	PrevScale = FVector2(Scale.X, Scale.Y);
 	flags7 |= MF7_HANDLENODELAY;
 	if (GetInfo()->LightAssociations.Size() || (state && state->Light > 0))
 	{
