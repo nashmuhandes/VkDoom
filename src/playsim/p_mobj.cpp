@@ -5242,7 +5242,7 @@ AActor *FLevelLocals::SpawnPlayer (FPlayerStart *mthing, int playernum, int flag
 		mobj->sprite = Skins[p->userinfo.GetSkin()].sprite;
 	}
 
-	p->DesiredFOV = p->FOV = fov;
+	p->DesiredFOV = p->prevFOV = p->FOV = fov;
 	p->camera = p->mo;
 	p->playerstate = PST_LIVE;
 	p->refire = 0;

@@ -2690,6 +2690,7 @@ struct PlayerInfo native play	// self is what internally is known as player_t
 	native Class<PlayerPawn> cls;
 	native float DesiredFOV;
 	native float FOV;
+	native float prevFOV;
 	native double viewz;
 	native double viewheight;
 	native double deltaviewheight;

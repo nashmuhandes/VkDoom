@@ -871,8 +871,9 @@ void D_Display ()
 		if (cam)
 		{
 			if (cam->player)
-				fov = cam->player->FOV;
-			else fov = cam->CameraFOV;
+				fov = cam->player->prevFOV + (cam->player->FOV - cam->player->prevFOV) * I_GetTimeFrac();
+			else 
+				fov = players[consoleplayer].prevFOV + (cam->CameraFOV - players[consoleplayer].prevFOV) * I_GetTimeFrac();
 		}
 		R_SetFOV(vp, fov);
 	}

@@ -307,6 +307,7 @@ public:
 
 	float		DesiredFOV = 0;				// desired field of vision
 	float		FOV = 0;					// current field of vision
+	float		prevFOV = 0;				// field of vision in previous tick for interpolation purposes
 	double		viewz = 0;					// focal origin above r.z
 	double		viewheight = 0;				// base height above floor for viewz
 	double		deltaviewheight = 0;		// squat speed.
