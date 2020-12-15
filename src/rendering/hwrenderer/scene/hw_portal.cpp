@@ -689,11 +689,14 @@ bool HWSkyboxPortal::Setup(HWDrawInfo *di, FRenderState &rstate, Clipper *clippe
 	vp.ActorPos = origin->Pos();
 	vp.Angles.Yaw += (origin->PrevAngles.Yaw + deltaangle(origin->PrevAngles.Yaw, origin->Angles.Yaw) * vp.TicFrac);
 
-	// Don't let the viewpoint be too close to a floor or ceiling
-	double floorh = origin->Sector->floorplane.ZatPoint(origin->Pos());
-	double ceilh = origin->Sector->ceilingplane.ZatPoint(origin->Pos());
-	if (vp.Pos.Z < floorh + 4) vp.Pos.Z = floorh + 4;
-	if (vp.Pos.Z > ceilh - 4) vp.Pos.Z = ceilh - 4;
+	if (!(origin->flags5 & MF5_NOINTERACTION))
+	{
+		// Don't let the viewpoint be too close to a floor or ceiling
+		double floorh = origin->Sector->floorplane.ZatPoint(origin->Pos());
+		double ceilh = origin->Sector->ceilingplane.ZatPoint(origin->Pos());
+		if (vp.Pos.Z < floorh + 4) vp.Pos.Z = floorh + 4;
+		if (vp.Pos.Z > ceilh - 4) vp.Pos.Z = ceilh - 4;
+	}
 
 	vp.ViewActor = origin;
 
