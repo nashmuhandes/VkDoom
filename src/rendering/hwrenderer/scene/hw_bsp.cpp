@@ -276,13 +276,6 @@ void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
 
 	if (seg->sidedef == nullptr)
 	{
-		if (!(currentsubsector->flags & SSECMF_DRAWN))
-		{
-			if (clipper.SafeCheckRange(startAngle, endAngle)) 
-			{
-				currentsubsector->flags |= SSECMF_DRAWN;
-			}
-		}
 		return;
 	}
 
@@ -290,11 +283,17 @@ void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
 	{
 		return;
 	}
+
+
 	currentsubsector->flags |= SSECMF_DRAWN;
 
 	uint8_t ispoly = uint8_t(seg->sidedef->Flags & WALLF_POLYOBJ);
 
-	if (!seg->backsector)
+	if (seg->linedef->flags2 & ML2_CLIPSEGS)
+	{
+		clipper.SafeAddClipRange(startAngle, endAngle);
+	}
+	else if (!seg->backsector)
 	{
 		clipper.SafeAddClipRange(startAngle, endAngle);
 	}
@@ -469,9 +468,9 @@ void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector)
 
 		while (count--)
 		{
-			if (seg->linedef == nullptr)
+			if (seg->linedef == nullptr || seg->linedef->flags2 & ML2_CLIPSEGS)
 			{
-				if (!(sub->flags & SSECMF_DRAWN)) AddLine (seg, mClipPortal != nullptr);
+				AddLine (seg, mClipPortal != nullptr);
 			}
 			else if (!(seg->sidedef->Flags & WALLF_POLYOBJ)) 
 			{

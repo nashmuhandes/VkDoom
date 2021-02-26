@@ -924,6 +924,10 @@ public:
 				Flag(ld->flags, ML_RAILING, key); 
 				continue;
 
+			case NAME_Clipsegs:
+				Flag(ld->flags2, ML2_CLIPSEGS, key);
+				continue;
+
 			case NAME_Blockfloaters:
 				CHECK_N(St | Zd | Zdt | Va)
 				Flag(ld->flags, ML_BLOCK_FLOATERS, key); 

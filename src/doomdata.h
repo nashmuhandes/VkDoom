@@ -179,8 +179,8 @@ enum ELineFlags : uint32_t
 	ML_PORTALCONNECT			= 0x80000000,	// for internal use only: This line connects to a sector with a linked portal (used to speed up sight checks.)
 	// Flag words may not exceed 32 bit due to VM limitations.
 	ML2_BLOCKLANDMONSTERS		= 0x1,	// MBF21
+	ML2_CLIPSEGS				= 0x2,
 };
-
 
 // Special activation types
 enum SPAC

@@ -165,7 +165,8 @@ struct Line native play
 	enum ELineFlags2
 	{
 		ML2_BLOCKLANDMONSTERS = 1,
-	}
+		ML2_CLIPSEGS = 2,
+	};
 
 	native readonly vertex			v1, v2;		// vertices, from v1 to v2
 	native readonly Vector2			delta;		// precalculated v2 - v1 for side checking
