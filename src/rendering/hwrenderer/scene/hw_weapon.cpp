@@ -328,7 +328,7 @@ void HUDSprite::SetBright(bool isbelow)
 
 bool HUDSprite::GetWeaponRenderStyle(DPSprite *psp, AActor *playermo, sector_t *viewsector, WeaponLighting &lighting)
 {
-	auto rs = psp->GetRenderStyle(playermo->RenderStyle, playermo->Alpha);
+	auto rs = psp->GetRenderStyle(playermo->RenderStyle, playermo->GetAlpha(r_viewpoint.TicFrac));
 
 	visstyle_t vis;
 

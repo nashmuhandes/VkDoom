@@ -997,7 +997,7 @@ namespace swrenderer
 		// Don't waste time projecting sprites that are definitely not visible.
 		if (thing == nullptr ||
 			(thing->renderflags & RF_INVISIBLE) ||
-			!thing->RenderStyle.IsVisible(thing->Alpha) ||
+			!thing->RenderStyle.IsVisible(thing->GetAlpha(r_viewpoint.TicFrac)) ||
 			!thing->IsVisibleToPlayer() ||
 			!thing->IsInsideVisibleAngles())
 		{

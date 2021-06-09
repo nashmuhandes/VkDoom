@@ -471,6 +471,7 @@ enum ActorRenderFlag
 	RF_NOINTERPOLATEVIEW = 0x40000000,	// don't interpolate the view next frame if this actor is a camera.
 	RF_NOSPRITESHADOW = 0x80000000,		// actor will not cast a sprite shadow
 	RF_INTERPOLATESCALE = 0x100000000,	// allow interpolation of actor's scale
+	RF_INTERPOLATEALPHA = 0x01000000,	// allow interpolation of actor's alpha
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -1237,6 +1238,7 @@ public:
 	DVector3 Prev;
 	DRotator PrevAngles;
 	FVector2 PrevScale;
+	float PrevAlpha;
 	int PrevPortalGroup;
 	TArray<FDynamicLight *> AttachedLights;
 	TDeletingArray<FLightDefaults *> UserLights;
@@ -1404,6 +1406,29 @@ public:
 			return FVector2(float(Scale.X), float(Scale.Y));
 		}
 	}
+	double GetAlpha(double ticFrac) const
+	{
+		if (renderflags & RF_INTERPOLATEALPHA)
+		{
+			return double(PrevAlpha) + (ticFrac * (Alpha - double(PrevAlpha)));
+		}
+		else
+		{
+			return Alpha;
+		}
+	}
+	float GetAlphaF(double ticFrac) const
+	{
+		if (renderflags & RF_INTERPOLATEALPHA)
+		{
+			return PrevAlpha + (ticFrac * (float(Alpha) - PrevAlpha));
+		}
+		else
+		{
+			return float(Alpha);
+		}
+	}
+
 	DVector3 PosPlusZ(double zadd) const
 	{
 		return { X(), Y(), Z() + zadd };

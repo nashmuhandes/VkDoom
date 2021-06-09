@@ -705,7 +705,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
     const auto &vp = di->Viewpoint;
 	AActor *camera = vp.camera;
 
-	if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->Alpha))
+	if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->GetAlpha(vp.TicFrac)))
 	{
 		if (!(thing->flags & MF_STEALTH) || !di->isStealthVision() || thing == camera)
 			return;
@@ -1048,7 +1048,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 	translation = thing->Translation;
 
 	OverrideShader = -1;
-	trans = thing->Alpha;
+	trans = thing->GetAlpha(vp.TicFrac);
 	hw_styleflags = STYLEHW_Normal;
 
 	if (RenderStyle.BlendOp >= STYLEOP_Fuzz && RenderStyle.BlendOp <= STYLEOP_FuzzOrRevSub)
