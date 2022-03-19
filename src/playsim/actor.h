@@ -470,8 +470,12 @@ enum ActorRenderFlag
 	RF_CASTSPRITESHADOW = 0x20000000,	// actor will cast a sprite shadow
 	RF_NOINTERPOLATEVIEW = 0x40000000,	// don't interpolate the view next frame if this actor is a camera.
 	RF_NOSPRITESHADOW = 0x80000000,		// actor will not cast a sprite shadow
-	RF_INTERPOLATESCALE = 0x100000000,	// allow interpolation of actor's scale
-	RF_INTERPOLATEALPHA = 0x01000000,	// allow interpolation of actor's alpha
+};
+
+enum ActorRenderFlag2
+{
+	RF2_INTERPOLATESCALE = 0x00000001,	// allow interpolation of actor's scale
+	RF2_INTERPOLATEALPHA = 0x00000002,	// allow interpolation of actor's alpha
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -576,6 +580,7 @@ typedef TFlags<ActorFlag6> ActorFlags6;
 typedef TFlags<ActorFlag7> ActorFlags7;
 typedef TFlags<ActorFlag8> ActorFlags8;
 typedef TFlags<ActorRenderFlag> ActorRenderFlags;
+typedef TFlags<ActorRenderFlag2> ActorRenderFlags2;
 typedef TFlags<ActorBounceFlag> ActorBounceFlags;
 typedef TFlags<ActorRenderFeatureFlag> ActorRenderFeatureFlags;
 DEFINE_TFLAGS_OPERATORS (ActorFlags)
@@ -587,6 +592,7 @@ DEFINE_TFLAGS_OPERATORS (ActorFlags6)
 DEFINE_TFLAGS_OPERATORS (ActorFlags7)
 DEFINE_TFLAGS_OPERATORS (ActorFlags8)
 DEFINE_TFLAGS_OPERATORS (ActorRenderFlags)
+DEFINE_TFLAGS_OPERATORS (ActorRenderFlags2)
 DEFINE_TFLAGS_OPERATORS (ActorBounceFlags)
 DEFINE_TFLAGS_OPERATORS (ActorRenderFeatureFlags)
 
@@ -1030,6 +1036,7 @@ public:
 	uint32_t			RenderHidden;		// current renderer must *not* have any of these features
 
 	ActorRenderFlags	renderflags;		// Different rendering flags
+	ActorRenderFlags2	renderflags2;		// [Rave] CPU Cache? What's that?
 	ActorFlags		flags;
 	ActorFlags2		flags2;			// Heretic flags
 	ActorFlags3		flags3;			// [RH] Hexen/Heretic actor-dependant behavior made flaggable
@@ -1385,7 +1392,7 @@ public:
 	}
 	DVector2 GetSpriteScale(double ticFrac)
 	{
-		if(renderflags & RF_INTERPOLATESCALE)
+		if(renderflags2 & RF2_INTERPOLATESCALE)
 		{
 			DVector2 prev(PrevScale.X, PrevScale.Y);
 			return prev + (ticFrac * (Scale - prev));
@@ -1397,7 +1404,7 @@ public:
 	}
 	FVector2 GetSpriteScaleF(double ticFrac)
 	{
-		if (renderflags & RF_INTERPOLATESCALE)
+		if (renderflags2 & RF2_INTERPOLATESCALE)
 		{
 			return PrevScale + (float(ticFrac) * (FVector2(float(Scale.X), float(Scale.Y)) - PrevScale));
 		}
@@ -1408,7 +1415,7 @@ public:
 	}
 	double GetAlpha(double ticFrac) const
 	{
-		if (renderflags & RF_INTERPOLATEALPHA)
+		if (renderflags2 & RF2_INTERPOLATEALPHA)
 		{
 			return double(PrevAlpha) + (ticFrac * (Alpha - double(PrevAlpha)));
 		}
@@ -1419,7 +1426,7 @@ public:
 	}
 	float GetAlphaF(double ticFrac) const
 	{
-		if (renderflags & RF_INTERPOLATEALPHA)
+		if (renderflags2 & RF2_INTERPOLATEALPHA)
 		{
 			return PrevAlpha + (ticFrac * (float(Alpha) - PrevAlpha));
 		}
