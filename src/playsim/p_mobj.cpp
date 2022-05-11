@@ -171,6 +171,7 @@ IMPLEMENT_POINTERS_START(AActor)
 	IMPLEMENT_POINTER(master)
 	IMPLEMENT_POINTER(Poisoner)
 	IMPLEMENT_POINTER(alternative)
+	IMPLEMENT_POINTER(ViewPos)
 IMPLEMENT_POINTERS_END
 
 AActor::~AActor ()
@@ -1187,7 +1188,6 @@ bool AActor::Grind(bool items)
 		// see rh_log entry for February 21, 1999. Don't know if it is still relevant.
 		if (state == NULL 									// Only use the default crushed state if:
 			&& !(flags & MF_NOBLOOD)						// 1. the monster bleeeds,
-			&& (Level->i_compatflags & COMPATF_CORPSEGIBS)			// 2. the compat setting is on,
 			&& player == NULL)								// 3. and the thing isn't a player.
 		{
 			isgeneric = true;
