@@ -274,6 +274,12 @@ void FMapInfoParser::ParseGameInfo()
 		if (sc.TokenType == '}') break;
 
 		sc.TokenMustBe(TK_Identifier);
+		if (sc.Compare("intro"))
+		{
+			ParseCutscene(gameinfo.IntroScene);
+			continue;
+		}
+
 		FString nextKey = sc.String;
 		sc.MustGetToken('=');
 
@@ -362,6 +368,7 @@ void FMapInfoParser::ParseGameInfo()
 			gameinfo.Dialogue = sc.String;
 			gameinfo.AddDialogues.Clear();
 		}
+
 		// Insert valid keys here.
 		GAMEINFOKEY_STRING(mCheatKey, "cheatKey")
 			GAMEINFOKEY_STRING(mEasyKey, "easyKey")
