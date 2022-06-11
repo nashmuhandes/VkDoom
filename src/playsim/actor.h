@@ -1029,7 +1029,7 @@ public:
 	DRotator		Angles;
 	DRotator		ViewAngles;			// Angle offsets for cameras
 	TObjPtr<DViewPosition*> ViewPos;			// Position offsets for cameras
-	DVector2		Scale;				// Scaling values; 1 is normal size
+	FVector2		Scale;				// Scaling values; 1 is normal size
 	double			Alpha;				// Since P_CheckSight makes an alpha check this can't be a float. It has to be a double.
 
 	int				sprite;				// used to find patch_t and flip value
@@ -1411,22 +1411,22 @@ public:
 		if(renderflags2 & RF2_INTERPOLATESCALE)
 		{
 			DVector2 prev(PrevScale.X, PrevScale.Y);
-			return prev + (ticFrac * (Scale - prev));
+			return prev + (ticFrac * (DVector2(Scale.X, Scale.Y) - prev));
 		}
 		else
 		{
-			return Scale;
+			return DVector2(Scale.X, Scale.Y);
 		}
 	}
 	FVector2 GetSpriteScaleF(double ticFrac)
 	{
 		if (renderflags2 & RF2_INTERPOLATESCALE)
 		{
-			return PrevScale + (float(ticFrac) * (FVector2(float(Scale.X), float(Scale.Y)) - PrevScale));
+			return PrevScale + (float(ticFrac) * (Scale - PrevScale));
 		}
 		else
 		{
-			return FVector2(float(Scale.X), float(Scale.Y));
+			return Scale;
 		}
 	}
 	double GetAlpha(double ticFrac) const
