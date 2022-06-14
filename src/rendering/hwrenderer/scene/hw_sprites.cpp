@@ -720,6 +720,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 
 	int spritenum = thing->sprite;
 	DVector2 sprscale = thing->GetSpriteScale(vp.TicFrac);
+
 	if (thing->player != nullptr)
 	{
 		P_CheckPlayerSprite(thing, spritenum, sprscale);

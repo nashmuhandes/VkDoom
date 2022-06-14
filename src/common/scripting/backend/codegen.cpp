@@ -2774,18 +2774,6 @@ FxExpression *FxAddSub::Resolve(FCompileContext& ctx)
 		{
 			ValueType = left->ValueType;
 		}
-		else if (left->ValueType == TypeFVector3 && right->ValueType == TypeFVector2) // TODO RAVE What the fuck is this?
-		{
-			ValueType = left->ValueType;
-		}
-		else if (left->ValueType == TypeFVector2 && right->ValueType == TypeVector2)
-		{
-			ValueType = left->ValueType;
-		}
-		else if (left->ValueType == TypeVector2 && right->ValueType == TypeFVector2)
-		{
-			ValueType = left->ValueType;
-		}
 		else
 		{
 			goto error;
