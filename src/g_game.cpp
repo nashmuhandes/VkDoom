@@ -1709,8 +1709,8 @@ void FLevelLocals::QueueBody (AActor *body)
 		const AActor *const defaultActor = body->GetDefault();
 		const FPlayerSkin &skin = Skins[skinidx];
 
-		body->Scale.X *= skin.Scale.X / defaultActor->Scale.X;
-		body->Scale.Y *= skin.Scale.Y / defaultActor->Scale.Y;
+		body->Scale.X *= float(skin.Scale.X) / defaultActor->Scale.X;
+		body->Scale.Y *= float(skin.Scale.Y) / defaultActor->Scale.Y;
 	}
 
 }

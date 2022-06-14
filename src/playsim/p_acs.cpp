@@ -4245,11 +4245,11 @@ void DLevelScript::DoSetActorProperty (AActor *actor, int property, int value)
 		break;
 
 	case APROP_ScaleX:
-		actor->Scale.X = ACSToDouble(value);
+		actor->Scale.X = ACSToFloat(value);
 		break;
 
 	case APROP_ScaleY:
-		actor->Scale.Y = ACSToDouble(value);
+		actor->Scale.Y = ACSToFloat(value);
 		break;
 
 	case APROP_Mass:

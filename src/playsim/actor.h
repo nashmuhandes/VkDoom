@@ -1444,7 +1444,7 @@ public:
 	{
 		if (renderflags2 & RF2_INTERPOLATEALPHA)
 		{
-			return PrevAlpha + (ticFrac * (float(Alpha) - PrevAlpha));
+			return PrevAlpha + float(ticFrac * (Alpha - double(PrevAlpha)));
 		}
 		else
 		{
