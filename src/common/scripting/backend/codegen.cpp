@@ -1849,7 +1849,7 @@ FxExpression *FxMinusSign::Resolve(FCompileContext& ctx)
 
 ExpEmit FxMinusSign::Emit(VMFunctionBuilder *build)
 {
-	assert(ValueType == Operand->ValueType);
+	//assert(ValueType == Operand->ValueType);
 	ExpEmit from = Operand->Emit(build);
 	ExpEmit to;
 	assert(from.Konst == 0);
@@ -2593,6 +2593,12 @@ FxExpression *FxMultiAssign::Resolve(FCompileContext &ctx)
 	}
 	auto VMRight = static_cast<FxVMFunctionCall *>(Right);
 	auto rets = VMRight->GetReturnTypes();
+	if (Base.Size() == 1)
+	{
+		Right->ScriptPosition.Message(MSG_ERROR, "Multi-assignment with only one element", VMRight->Function->SymbolName.GetChars());
+		delete this;
+		return nullptr;
+	}
 	if (rets.Size() < Base.Size())
 	{
 		Right->ScriptPosition.Message(MSG_ERROR, "Insufficient returns in function %s", VMRight->Function->SymbolName.GetChars());
@@ -3515,7 +3521,8 @@ FxExpression *FxCompareEq::Resolve(FCompileContext& ctx)
 		return nullptr;
 	}
 
-	if (left->ValueType != right->ValueType)	// identical types are always comparable, if they can be placed in a register, so we can save most checks if this is the case.
+	// identical types are always comparable, if they can be placed in a register, so we can save most checks if this is the case.
+	if (left->ValueType != right->ValueType && !(left->IsVector2() && right->IsVector2()) && !(left->IsVector3() && right->IsVector3()))
 	{
 		FxExpression *x;
 		if (left->IsNumeric() && right->ValueType == TypeString && (x = StringConstToChar(right)))

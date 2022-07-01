@@ -368,6 +368,8 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(RF, ZDOOMTRANS, AActor, renderflags),
 	DEFINE_FLAG(RF, CASTSPRITESHADOW, AActor, renderflags),
 	DEFINE_FLAG(RF, NOSPRITESHADOW, AActor, renderflags),
+	DEFINE_FLAG(RF2, INVISIBLEINMIRRORS, AActor, renderflags2),
+	DEFINE_FLAG(RF2, ONLYVISIBLEINMIRRORS, AActor, renderflags2),
 
 	DEFINE_FLAG(RF2, INTERPOLATESCALE, AActor, renderflags2),
 	DEFINE_FLAG(RF2, INTERPOLATEALPHA, AActor, renderflags2),

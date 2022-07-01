@@ -479,8 +479,10 @@ enum ActorRenderFlag
 
 enum ActorRenderFlag2
 {
-	RF2_INTERPOLATESCALE = 0x00000001,	// allow interpolation of actor's scale
-	RF2_INTERPOLATEALPHA = 0x00000002,	// allow interpolation of actor's alpha
+	RF2_INVISIBLEINMIRRORS		= 0x0001,	// [Nash] won't render in mirrors
+	RF2_ONLYVISIBLEINMIRRORS	= 0x0002,	// [Nash] only renders in mirrors
+	RF2_INTERPOLATESCALE		= 0x0004,	// allow interpolation of actor's scale
+	RF2_INTERPOLATEALPHA		= 0x0008,	// allow interpolation of actor's alpha
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -1045,7 +1047,7 @@ public:
 	uint32_t			RenderHidden;		// current renderer must *not* have any of these features
 
 	ActorRenderFlags	renderflags;		// Different rendering flags
-	ActorRenderFlags2	renderflags2;		// [Rave] CPU Cache? What's that?
+	ActorRenderFlags2	renderflags2;		// More rendering flags...
 	ActorFlags		flags;
 	ActorFlags2		flags2;			// Heretic flags
 	ActorFlags3		flags3;			// [RH] Hexen/Heretic actor-dependant behavior made flaggable
