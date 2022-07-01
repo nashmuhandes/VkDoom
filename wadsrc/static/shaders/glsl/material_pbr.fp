@@ -78,7 +78,7 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 
 	vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-	vec3 Lo = uDynLightColor.rgb;
+	vec3 Lo = vec3(0);
 
 	if (uLightIndex >= 0)
 	{
@@ -175,7 +175,7 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 	vec3 kS = F;
 	vec3 kD = 1.0 - kS;
 
-	vec3 irradiance = ambientLight; // texture(irradianceMap, N).rgb
+	vec3 irradiance = ambientLight + uDynLightColor.rgb; // texture(irradianceMap, N).rgb
 	vec3 diffuse = irradiance * albedo;
 
 	//kD *= 1.0 - metallic;
