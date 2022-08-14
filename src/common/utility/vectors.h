@@ -141,11 +141,13 @@ struct TVector2
 	}
 
 	// Scalar addition
+#if 0
 	TVector2 &operator+= (double scalar)
 	{
 		X += scalar, Y += scalar;
 		return *this;
 	}
+#endif
 
 	friend TVector2 operator+ (const TVector2 &v, vec_t scalar)
 	{
@@ -341,6 +343,11 @@ struct TVector3
 		return X == 0 && Y == 0 && Z == 0;
 	}
 
+	TVector3 plusZ(double z)
+	{
+		return { X, Y, Z + z };
+	}
+
 	TVector3 &operator= (const TVector3 &other) = default;
 
 	// Access X and Y and Z as an array
@@ -385,11 +392,13 @@ struct TVector3
 	}
 
 	// Scalar addition
+#if 0
 	TVector3 &operator+= (vec_t scalar)
 	{
 		X += scalar, Y += scalar, Z += scalar;
 		return *this;
 	}
+#endif
 
 	friend TVector3 operator+ (const TVector3 &v, vec_t scalar)
 	{
@@ -915,6 +924,7 @@ struct TMatrix3x3
 
 	TMatrix3x3() = default;
 	TMatrix3x3(const TMatrix3x3 &other) = default;
+	TMatrix3x3& operator=(const TMatrix3x3& other) = default;
 
 	TMatrix3x3(const Vector3 &row1, const Vector3 &row2, const Vector3 &row3)
 	{
