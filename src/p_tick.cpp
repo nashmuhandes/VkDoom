@@ -150,11 +150,11 @@ void P_Ticker (void)
 	// Interpolate Zoom
 	if (!players[consoleplayer].camera || players[consoleplayer].camera->player)
 	{
-		players[consoleplayer].prevFOV = players[consoleplayer].FOV;
+		players[consoleplayer].prevFOV = float(players[consoleplayer].FOV);
 	}
 	else
 	{
-		players[consoleplayer].prevFOV = players[consoleplayer].camera->CameraFOV;
+		players[consoleplayer].prevFOV = float(players[consoleplayer].camera->CameraFOV);
 	}
 
 	// Reset all actor interpolations on all levels before the current thinking turn so that indirect actor movement gets properly interpolated.
