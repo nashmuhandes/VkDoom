@@ -729,7 +729,7 @@ void R_AddInterpolationPoint(const DVector3a &vec)
 //
 //==========================================================================
 
-static double QuakePower(double factor, double intensity, double offset)
+static double QuakePower(double factor, double intensity, double offset, double phase, double phaseMul)
 { 
 	double randumb;
 	if (intensity == 0)
@@ -738,8 +738,10 @@ static double QuakePower(double factor, double intensity, double offset)
 	}
 	else
 	{
-		randumb = pr_torchflicker.GenRand_Real2() * (intensity * 2) - intensity;
+		randumb = sin((r_viewpoint.TicFrac + gametic + phase) * phaseMul) * cos((r_viewpoint.TicFrac + gametic + phase + 0.7) * phaseMul * 0.333) * intensity;
+		//pr_torchflicker.GenRand_Real2() * (intensity * 2) - intensity;
 	}
+
 	return factor * (offset + randumb);
 }
 
@@ -958,19 +960,19 @@ void R_SetupFrame (FRenderViewpoint &viewpoint, FViewWindow &viewwindow, AActor 
 			DVector3 pos; pos.Zero();
 			if (jiggers.RollIntensity != 0 || jiggers.RollWave != 0)
 			{
-				viewpoint.Angles.Roll += QuakePower(quakefactor, jiggers.RollIntensity, jiggers.RollWave);
+				viewpoint.Angles.Roll += QuakePower(quakefactor, jiggers.RollIntensity, jiggers.RollWave, 1.7, 1.35);
 			}
 			if (jiggers.RelIntensity.X != 0 || jiggers.RelOffset.X != 0)
 			{
-				pos.X += QuakePower(quakefactor, jiggers.RelIntensity.X, jiggers.RelOffset.X);
+				pos.X += QuakePower(quakefactor, jiggers.RelIntensity.X, jiggers.RelOffset.X, 0.25, 1.5);
 			}
 			if (jiggers.RelIntensity.Y != 0 || jiggers.RelOffset.Y != 0)
 			{
-				pos.Y += QuakePower(quakefactor, jiggers.RelIntensity.Y, jiggers.RelOffset.Y);
+				pos.Y += QuakePower(quakefactor, jiggers.RelIntensity.Y, jiggers.RelOffset.Y, 1.0, 1.45);
 			}
 			if (jiggers.RelIntensity.Z != 0 || jiggers.RelOffset.Z != 0)
 			{
-				pos.Z += QuakePower(quakefactor, jiggers.RelIntensity.Z, jiggers.RelOffset.Z);
+				pos.Z += QuakePower(quakefactor, jiggers.RelIntensity.Z, jiggers.RelOffset.Z, 2.0, 1.55);
 			}
 			// [MC] Tremendous thanks to Marisa Kirisame for helping me with this.
 			// Use a rotation matrix to make the view relative.
@@ -992,15 +994,15 @@ void R_SetupFrame (FRenderViewpoint &viewpoint, FViewWindow &viewwindow, AActor 
 
 			if (jiggers.Intensity.X != 0 || jiggers.Offset.X != 0)
 			{
-				viewpoint.Pos.X += QuakePower(quakefactor, jiggers.Intensity.X, jiggers.Offset.X);
+				viewpoint.Pos.X += QuakePower(quakefactor, jiggers.Intensity.X, jiggers.Offset.X, 0.25, 1.5);
 			}
 			if (jiggers.Intensity.Y != 0 || jiggers.Offset.Y != 0)
 			{
-				viewpoint.Pos.Y += QuakePower(quakefactor, jiggers.Intensity.Y, jiggers.Offset.Y);
+				viewpoint.Pos.Y += QuakePower(quakefactor, jiggers.Intensity.Y, jiggers.Offset.Y, 1.0, 1.45);
 			}
 			if (jiggers.Intensity.Z != 0 || jiggers.Offset.Z != 0)
 			{
-				viewpoint.Pos.Z += QuakePower(quakefactor, jiggers.Intensity.Z, jiggers.Offset.Z);
+				viewpoint.Pos.Z += QuakePower(quakefactor, jiggers.Intensity.Z, jiggers.Offset.Z, 2.0, 1.55);
 			}
 		}
 	}

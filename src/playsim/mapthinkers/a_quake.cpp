@@ -299,8 +299,8 @@ int DEarthquake::StaticGetQuakeIntensities(double ticFrac, AActor *victim, FQuak
 		{
 			double dist;
 
-			if (quake->m_Flags & QF_3D)	dist = quake->m_Spot->Distance3D(victim, true);
-			else						dist = quake->m_Spot->Distance2D(victim, true);
+			if (quake->m_Flags & QF_3D)	dist = quake->m_Spot->Distance3D(victim, false);
+			else						dist = quake->m_Spot->Distance2D(victim, false);
 
 			if (dist < quake->m_TremorRadius)
 			{
