@@ -1064,7 +1064,7 @@ FxExpression *FxFloatCast::Resolve(FCompileContext &ctx)
 ExpEmit FxFloatCast::Emit(VMFunctionBuilder *build)
 {
 	ExpEmit from = basex->Emit(build);
-	assert(!from.Konst);
+	//assert(!from.Konst);
 	assert(basex->ValueType->GetRegType() == REGT_INT);
 	from.Free(build);
 	ExpEmit to(build, REGT_FLOAT);
@@ -2595,7 +2595,7 @@ FxExpression *FxMultiAssign::Resolve(FCompileContext &ctx)
 	auto rets = VMRight->GetReturnTypes();
 	if (Base.Size() == 1)
 	{
-		Right->ScriptPosition.Message(MSG_ERROR, "Multi-assignment with only one element", VMRight->Function->SymbolName.GetChars());
+		Right->ScriptPosition.Message(MSG_ERROR, "Multi-assignment with only one element in function %s", VMRight->Function->SymbolName.GetChars());
 		delete this;
 		return nullptr;
 	}
@@ -6714,12 +6714,12 @@ FxExpression *FxCVar::Resolve(FCompileContext &ctx)
 	switch (CVar->GetRealType())
 	{
 	case CVAR_Bool:
-	case CVAR_DummyBool:
+	case CVAR_Flag:
 		ValueType = TypeBool;
 		break;
 
 	case CVAR_Int:
-	case CVAR_DummyInt:
+	case CVAR_Mask:
 		ValueType = TypeSInt32;
 		break;
 
@@ -6775,7 +6775,7 @@ ExpEmit FxCVar::Emit(VMFunctionBuilder *build)
 		build->Emit(OP_LS, dest.RegNum, addr.RegNum, nul);
 		break;
 
-	case CVAR_DummyBool:
+	case CVAR_Flag:
 	{
 		int *pVal;
 		auto cv = static_cast<FFlagCVar *>(CVar);
@@ -6788,7 +6788,7 @@ ExpEmit FxCVar::Emit(VMFunctionBuilder *build)
 		break;
 	}
 
-	case CVAR_DummyInt:
+	case CVAR_Mask:
 	{
 		auto cv = static_cast<FMaskCVar *>(CVar);
 		build->Emit(OP_LKP, addr.RegNum, build->GetConstantAddress(&cv->ValueVar.Value));
@@ -7505,7 +7505,7 @@ ExpEmit FxArrayElement::Emit(VMFunctionBuilder *build)
 		else
 		{
 			static int LKR_Ops[] = { OP_LK_R, OP_LKF_R, OP_LKS_R, OP_LKP_R };
-			assert(start.RegType == ValueType->GetRegType());
+			//assert(start.RegType == ValueType->GetRegType());
 			ExpEmit dest(build, start.RegType);
 			if (start.RegNum <= 255)
 			{

@@ -15,24 +15,28 @@ __forceinline constexpr int64_t DivScaleL(int64_t a, int64_t b, int shift) { ret
 
 #include "xs_Float.h"
 
-inline fixed_t FloatToFixed(double f)
+template<int b = 16>
+constexpr fixed_t FloatToFixed(double f)
 {
-	return xs_Fix<16>::ToFix(f);
+	return int(f * (1 << b));
 }
 
+template<int b = 16>
 inline constexpr fixed_t IntToFixed(int32_t f)
 {
-	return f << FRACBITS;
+	return f << b;
 }
 
+template<int b = 16>
 inline constexpr double FixedToFloat(fixed_t f)
 {
-	return f * (1/65536.);
+	return f * (1. / (1 << b));
 }
 
+template<int b = 16>
 inline constexpr int32_t FixedToInt(fixed_t f)
 {
-	return (f + FRACUNIT/2) >> FRACBITS;
+	return (f + (1 << (b-1))) >> b;
 }
 
 inline unsigned FloatToAngle(double f)
@@ -40,20 +44,9 @@ inline unsigned FloatToAngle(double f)
 	return xs_CRoundToInt((f)* (0x40000000 / 90.));
 }
 
-inline constexpr double AngleToFloat(unsigned f)
-{
-	return f * (90. / 0x40000000);
-}
-
-inline constexpr double AngleToFloat(int f)
-{
-	return f * (90. / 0x40000000);
-}
-
 #define FLOAT2FIXED(f)		FloatToFixed(f)
 #define FIXED2FLOAT(f)		float(FixedToFloat(f))
 #define FIXED2DBL(f)		FixedToFloat(f)
 
-#define ANGLE2DBL(f)		AngleToFloat(f)
 
 #endif

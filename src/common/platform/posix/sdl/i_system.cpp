@@ -301,7 +301,7 @@ void I_PrintStr(const char *cp)
 	if (StartWindow) RedrawProgressBar(ProgressBarCurPos,ProgressBarMaxPos);
 }
 
-int I_PickIWad (WadStuff *wads, int numwads, bool showwin, int defaultiwad)
+int I_PickIWad (WadStuff *wads, int numwads, bool showwin, int defaultiwad, int&)
 {
 	int i;
 
@@ -410,6 +410,23 @@ FString I_GetFromClipboard (bool use_primary_selection)
 	return "";
 }
 
+FString I_GetCWD()
+{
+	char* curdir = get_current_dir_name();
+	if (!curdir) 
+	{
+		return "";
+	}
+	FString ret(curdir);
+	free(curdir);
+	return ret;
+}
+
+bool I_ChDir(const char* path)
+{
+	return chdir(path) == 0;
+}
+
 // Return a random seed, preferably one with lots of entropy.
 unsigned int I_MakeRNGSeed()
 {
@@ -432,18 +449,20 @@ unsigned int I_MakeRNGSeed()
 	return seed;
 }
 
-void I_OpenShellFolder(const char* folder)
+void I_OpenShellFolder(const char* infolder)
 {
-	std::string x = (std::string)"xdg-open \"" + (std::string)folder + "\"";
-	Printf("Opening folder: %s\n", folder);
-	std::system(x.c_str());
-}
+	char* curdir = get_current_dir_name();
 
-void I_OpenShellFile(const char* file)
-{
-	std::string x = (std::string)"xdg-open \"" + (std::string)file + "\"";
-	x.erase(x.find_last_of('/'), std::string::npos);
-	Printf("Opening folder to file: %s\n", file);
-	std::system(x.c_str());
+	if (!chdir(infolder))
+	{
+		Printf("Opening folder: %s\n", infolder);
+		std::system("xdg-open .");
+		chdir(curdir);
+	}
+	else
+	{
+		Printf("Unable to open directory '%s\n", infolder);
+	}
+	free(curdir);
 }
 
