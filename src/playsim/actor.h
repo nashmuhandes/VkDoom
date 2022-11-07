@@ -47,8 +47,7 @@
 #include "g_level.h"
 #include "tflags.h"
 #include "portal.h"
-#include "matrix.h"
-#include "TRS.h"
+#include "bonecomponents.h"
 
 struct subsector_t;
 struct FBlockNode;
@@ -693,16 +692,6 @@ public:
 	virtual void Serialize(FSerializer& arc) override;
 };
 
-class DBoneComponents : public DObject
-{
-	DECLARE_CLASS(DBoneComponents, DObject);
-public:
-	TArray<TArray<TRS>>			trscomponents;
-	TArray<TArray<VSMatrix>>	trsmatrix;
-
-	DBoneComponents() = default;
-};
-
 class DViewPosition : public DObject
 {
 	DECLARE_CLASS(DViewPosition, DObject);
@@ -736,15 +725,15 @@ public:
 const double MinVel = EQUAL_EPSILON;
 
 // Map Object definition.
-class AActor : public DThinker
+class AActor final : public DThinker
 {
 	DECLARE_CLASS_WITH_META (AActor, DThinker, PClassActor)
 	HAS_OBJECT_POINTERS
 public:
 	AActor() = default;
 	AActor(const AActor &other) = delete;	// Calling this would be disastrous.
-	AActor &operator= (const AActor &other);
-	~AActor ();
+	AActor &operator= (const AActor &other) = delete;
+	~AActor () = default;
 
 	virtual void OnDestroy() override;
 	virtual void Serialize(FSerializer &arc) override;
@@ -809,7 +798,6 @@ public:
 	bool CallSlam(AActor *victim);
 
 	// Something just touched this actor.
-	virtual void Touch(AActor *toucher);
 	void CallTouch(AActor *toucher);
 
 	// Apply gravity and/or make actor sink in water.
@@ -850,9 +838,6 @@ public:
 	// Tosses an item out of the inventory.
 	AActor *DropInventory (AActor *item, int amt = -1);
 
-	// Removes all items from the inventory.
-	void ClearInventory();
-
 	// Returns true if this view is considered "local" for the player.
 	bool CheckLocalView() const;
 
@@ -866,9 +851,6 @@ public:
 
 	// Adds one item of a particular type. Returns NULL if it could not be added.
 	AActor *GiveInventoryType (PClassActor *type);
-
-	// Destroys all the inventory the actor is holding.
-	void DestroyAllInventory ();
 
 	// Set the alphacolor field properly
 	void SetShade (uint32_t rgb);
@@ -887,7 +869,6 @@ public:
 	bool Massacre ();
 
 	// Transforms the actor into a finely-ground paste
-	bool Grind(bool items);
 	bool CallGrind(bool items);
 
 	// Get this actor's team
@@ -1325,11 +1306,9 @@ public:
 	void UnlinkFromWorld(FLinkContext *ctx);
 	void AdjustFloorClip ();
 	bool IsMapActor();
-	int GetTics(FState * newstate);
 	bool SetState (FState *newstate, bool nofunction=false);
-	double UpdateWaterDepth(bool splash);
-	virtual void SplashCheck();
-	virtual bool UpdateWaterLevel (bool splash=true);
+	void SplashCheck();
+	bool UpdateWaterLevel (bool splash=true);
 	bool isFast();
 	bool isSlow();
 	void SetIdle(bool nofunction=false);
@@ -1609,7 +1588,6 @@ public:
 
 	bool				hasmodel;
 
-	void PlayerLandedMakeGruntSound(AActor* onmobj);
 };
 
 class FActorIterator
