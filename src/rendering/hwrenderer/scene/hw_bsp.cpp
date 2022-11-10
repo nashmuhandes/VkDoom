@@ -463,9 +463,9 @@ void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector)
 
 		while (count--)
 		{
-			if (seg->linedef == nullptr || seg->linedef->flags2 & ML2_CLIPSEGS)
+			if (seg->linedef == nullptr)
 			{
-				AddLine (seg, mClipPortal != nullptr);
+				if (!(sub->flags & SSECMF_DRAWN)) AddLine(seg, mClipPortal != nullptr);
 			}
 			else if (!(seg->sidedef->Flags & WALLF_POLYOBJ)) 
 			{
