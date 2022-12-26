@@ -1242,8 +1242,8 @@ DEFINE_MAP_OPTION(PrecacheSounds, true)
 	do
 	{
 		parse.sc.MustGetString();
-		FSoundID snd = parse.sc.String;
-		if (snd == 0)
+		FSoundID snd = S_FindSound(parse.sc.String);
+		if (snd == NO_SOUND)
 		{
 			parse.sc.ScriptMessage("Unknown sound \"%s\"", parse.sc.String);
 		}
@@ -2299,9 +2299,11 @@ void FMapInfoParser::ParseMapInfo (int lump, level_info_t &gamedefaults, level_i
 						fileSystem.GetResourceFileFullName(fileSystem.GetFileContainer(inclump)), sc.String);
 				}
 			}
-			FScanner saved_sc = sc;
-			ParseMapInfo(inclump, gamedefaults, defaultinfo);
-			sc = saved_sc;
+			// use a new parser object to parse the include. Otherwise we'd have to save the entire FScanner in a local variable which is a lot more messy.
+			FMapInfoParser includer(&sc);
+			includer.format_type = format_type;
+			includer.HexenHack = HexenHack;
+			includer.ParseMapInfo(inclump, gamedefaults, defaultinfo);
 		}
 		else if (sc.Compare("gamedefaults"))
 		{

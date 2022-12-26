@@ -168,6 +168,7 @@ void P_Ticker (void)
 		while ((ac = it.Next()))
 		{
 			ac->ClearInterpolation();
+			ac->ClearFOVInterpolation();
 		}
 
 		P_ThinkParticles(Level);	// [RH] make the particles think

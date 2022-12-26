@@ -78,6 +78,10 @@ struct CutsceneDef;
 
 struct FMapInfoParser
 {
+	FMapInfoParser(FScanner* parent)
+		: sc(parent ? &parent->GetSymbols() : nullptr)
+	{
+	}
 	enum EFormatType
 	{
 		FMT_Unknown,
@@ -389,7 +393,7 @@ struct level_info_t
 
 	TArray<FSpecialAction> specialactions;
 
-	TArray<int> PrecacheSounds;
+	TArray<FSoundID> PrecacheSounds;
 	TArray<FString> PrecacheTextures;
 	TArray<FName> PrecacheClasses;
 	

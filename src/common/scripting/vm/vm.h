@@ -215,6 +215,11 @@ struct VMReturn
 		Location = loc;
 		RegType = REGT_FLOAT | REGT_MULTIREG2;
 	}
+	void Vec3At(DVector3 *loc)
+	{
+		Location = loc;
+		RegType = REGT_FLOAT | REGT_MULTIREG3;
+	}
 	void StringAt(FString *loc)
 	{
 		Location = loc;
@@ -229,6 +234,7 @@ struct VMReturn
 	VMReturn(int *loc) { IntAt(loc); }
 	VMReturn(double *loc) { FloatAt(loc); }
 	VMReturn(DVector2 *loc) { Vec2At(loc); }
+	VMReturn(DVector3 *loc) { Vec3At(loc); }
 	VMReturn(FString *loc) { StringAt(loc); }
 	VMReturn(void **loc) { PointerAt(loc); }
 };
@@ -539,7 +545,7 @@ bool AssertObject(void * ob);
 #define PARAM_UINT_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); unsigned x = param[p].i;
 #define PARAM_BOOL_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); bool x = !!param[p].i;
 #define PARAM_NAME_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); FName x = ENamedName(param[p].i);
-#define PARAM_SOUND_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); FSoundID x = param[p].i;
+#define PARAM_SOUND_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); FSoundID x = FSoundID::fromInt(param[p].i);
 #define PARAM_COLOR_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_INT); PalEntry x = param[p].i;
 #define PARAM_FLOAT_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_FLOAT); double x = param[p].f;
 #define PARAM_ANGLE_AT(p,x)			assert((p) < numparam); assert(reginfo[p] == REGT_FLOAT); DAngle x = DAngle::fromDeg(param[p].f);
@@ -632,7 +638,8 @@ struct DirectNativeDesc
 	template<typename Ret, TP(1), TP(2), TP(3), TP(4), TP(5), TP(6), TP(7), TP(8), TP(9), TP(10), TP(11), TP(12)> DirectNativeDesc(Ret(*func)(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12)) : Ptr(reinterpret_cast<void*>(func)) { ValidateRet<Ret>(); VP(1); VP(2); VP(3); VP(4); VP(5); VP(6); VP(7); VP(8); VP(9); VP(10); VP(11); VP(12); }
 	template<typename Ret, TP(1), TP(2), TP(3), TP(4), TP(5), TP(6), TP(7), TP(8), TP(9), TP(10), TP(11), TP(12), TP(13)> DirectNativeDesc(Ret(*func)(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13)) : Ptr(reinterpret_cast<void*>(func)) { ValidateRet<Ret>(); VP(1); VP(2); VP(3); VP(4); VP(5); VP(6); VP(7); VP(8); VP(9); VP(10); VP(11); VP(12); VP(13); }
 	template<typename Ret, TP(1), TP(2), TP(3), TP(4), TP(5), TP(6), TP(7), TP(8), TP(9), TP(10), TP(11), TP(12), TP(13), TP(14)> DirectNativeDesc(Ret(*func)(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14)) : Ptr(reinterpret_cast<void*>(func)) { ValidateRet<Ret>(); VP(1); VP(2); VP(3); VP(4); VP(5); VP(6); VP(7); VP(8); VP(9); VP(10); VP(11); VP(12); VP(13), VP(14); }
-	#undef TP
+	template<typename Ret, TP(1), TP(2), TP(3), TP(4), TP(5), TP(6), TP(7), TP(8), TP(9), TP(10), TP(11), TP(12), TP(13), TP(14), TP(15)> DirectNativeDesc(Ret(*func)(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14)) : Ptr(reinterpret_cast<void*>(func)) { ValidateRet<Ret>(); VP(1); VP(2); VP(3); VP(4); VP(5); VP(6); VP(7); VP(8); VP(9); VP(10); VP(11); VP(12); VP(13), VP(14), VP(15); }
+#undef TP
 	#undef VP
 
 	template<typename T> void ValidateType() { static_assert(native_is_valid<T>::value, "Argument type is not valid as a direct native parameter or return type"); }

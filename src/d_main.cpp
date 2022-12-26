@@ -900,11 +900,9 @@ void D_Display ()
 		AActor *cam = players[consoleplayer].camera;
 		if (cam)
 		{
-			if (cam->player)
-				fov = DAngle::fromDeg(cam->player->prevFOV + (cam->player->FOV - cam->player->prevFOV) * I_GetTimeFrac());
-			else 
-				fov = DAngle::fromDeg(players[consoleplayer].prevFOV + (cam->CameraFOV - players[consoleplayer].prevFOV) * I_GetTimeFrac());
+			fov = DAngle::fromDeg(cam->GetFOV(I_GetTimeFrac()));
 		}
+
 		R_SetFOV(vp, fov);
 	}
 
@@ -1218,6 +1216,7 @@ void D_DoomLoop ()
 			}
 			// Update display, next frame, with current state.
 			I_StartTic ();
+			D_ProcessEvents();
 			D_Display ();
 			S_UpdateMusic();
 			if (wantToRestart)

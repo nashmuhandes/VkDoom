@@ -194,10 +194,9 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	renderer->EndDrawModel(actor->RenderStyle, smf);
 }
 
-void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, float ofsX, float ofsY)
+void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translation, FVector3 rotation, FVector3 rotation_pivot, FSpriteModelFrame *smf)
 {
 	AActor * playermo = players[consoleplayer].camera;
-	FSpriteModelFrame *smf = psp->Caller != nullptr ? FindModelFrame(psp->Caller->modelData != nullptr ? psp->Caller->modelData->modelDef != NAME_None ? PClass::FindActor(psp->Caller->modelData->modelDef) : psp->Caller->GetClass() : psp->Caller->GetClass(), psp->GetSprite(), psp->GetFrame(), false) : nullptr;
 
 	// [BB] No model found for this sprite, so we can't render anything.
 	if (smf == nullptr)
@@ -222,8 +221,19 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, float ofsX, float o
 	objectToWorldMatrix.translate(smf->xoffset / smf->xscale, smf->zoffset / smf->zscale, smf->yoffset / smf->yscale);
 
 	// [BB] Weapon bob, very similar to the normal Doom weapon bob.
-	objectToWorldMatrix.rotate(ofsX / 4, 0, 1, 0);
-	objectToWorldMatrix.rotate((ofsY - WEAPONTOP) / -4., 1, 0, 0);
+
+	
+
+	objectToWorldMatrix.translate(rotation_pivot.X, rotation_pivot.Y, rotation_pivot.Z);
+	
+	objectToWorldMatrix.rotate(rotation.X, 0, 1, 0);
+	objectToWorldMatrix.rotate(rotation.Y, 1, 0, 0);
+	objectToWorldMatrix.rotate(rotation.Z, 0, 0, 1);
+
+	objectToWorldMatrix.translate(-rotation_pivot.X, -rotation_pivot.Y, -rotation_pivot.Z);
+	
+	objectToWorldMatrix.translate(translation.X, translation.Y, translation.Z);
+	
 
 	// [BB] For some reason the jDoom models need to be rotated.
 	objectToWorldMatrix.rotate(90.f, 0, 1, 0);
@@ -366,7 +376,6 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			auto& ssids = surfaceskinids.Size() > 0 ? surfaceskinids : smf->surfaceskinIDs;
 			auto ssidp = (unsigned)(i * MD3_MAX_SURFACES) < ssids.Size() ? &ssids[i * MD3_MAX_SURFACES] : nullptr;
 
-			const TArray<TRS>* animationData = nullptr;
 
 			bool nextFrame = smfNext && modelframe != modelframenext;
 
@@ -382,11 +391,11 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			if (animationid >= 0)
 			{
 				FModel* animation = Models[animationid];
-				animationData = animation->AttachAnimationData();
+				const TArray<TRS>* animationData = animation->AttachAnimationData();
 
 				if (!(smf->flags & MDL_MODELSAREATTACHMENTS) || evaluatedSingle == false)
 				{
-					boneData = animation->CalculateBones(modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : 0.f, *animationData, actor->boneComponentData, i);
+					boneData = animation->CalculateBones(modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : 0.f, animationData, actor->boneComponentData, i);
 					boneStartingPosition = renderer->SetupFrame(animation, 0, 0, 0, boneData, -1);
 					evaluatedSingle = true;
 				}
@@ -395,7 +404,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			{
 				if (!(smf->flags & MDL_MODELSAREATTACHMENTS) || evaluatedSingle == false)
 				{
-					boneData = mdl->CalculateBones(modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : 0.f, *animationData, actor->boneComponentData, i);
+					boneData = mdl->CalculateBones(modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : 0.f, nullptr, actor->boneComponentData, i);
 					boneStartingPosition = renderer->SetupFrame(mdl, 0, 0, 0, boneData, -1);
 					evaluatedSingle = true;
 				}
@@ -822,6 +831,10 @@ static void ParseModelDefLump(int Lump)
 						if (smf.modelIDs[index] != -1)
 						{
 							FModel *model = Models[smf.modelIDs[index]];
+							if (smf.animationIDs[index] != -1)
+							{
+								model = Models[smf.animationIDs[index]];
+							}
 							smf.modelframes[index] = model->FindFrame(sc.String);
 							if (smf.modelframes[index]==-1) sc.ScriptError("Unknown frame '%s' in %s", sc.String, type->TypeName.GetChars());
 						}

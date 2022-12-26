@@ -824,6 +824,10 @@ static int ExecScriptFunc(VMFrameStack *stack, VMReturn *ret, int numret)
 					assert(b < f->NumRegF);
 					::new(param) VMValue(&reg.f[b]);
 					break;
+				case REGT_FLOAT | REGT_MULTIREG2 | REGT_ADDROF:
+				case REGT_FLOAT | REGT_MULTIREG3 | REGT_ADDROF:
+				case REGT_FLOAT | REGT_MULTIREG4 | REGT_ADDROF:
+					I_Error("REGT_ADDROF not implemented for vectors\n");
 				case REGT_FLOAT | REGT_KONST:
 					assert(b < sfunc->NumKonstF);
 					::new(param) VMValue(konstf[b]);
@@ -2122,12 +2126,12 @@ static void DoCast(const VMRegisters &reg, const VMFrame *f, int a, int b, int c
 
 	case CAST_S2So:
 		ASSERTD(a); ASSERTS(b);
-		reg.d[a] = FSoundID(reg.s[b]);
+		reg.d[a] = S_FindSound(reg.s[b]).index();
 		break;
 
 	case CAST_So2S:
 		ASSERTS(a); ASSERTD(b);
-		reg.s[a] = soundEngine->GetSoundName(reg.d[b]);
+		reg.s[a] = soundEngine->GetSoundName(FSoundID::fromInt(reg.d[b]));
 		break;
 
 	case CAST_SID2S:

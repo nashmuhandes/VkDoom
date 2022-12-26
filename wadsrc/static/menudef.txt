@@ -1221,6 +1221,7 @@ OptionMenu "MiscOptions" protected
 	}
 	Option "$MISCMNU_QUERYIWAD",				"queryiwad", "OnOff"
 	StaticText " "
+	Option "$MISCMNU_FVIEWBOB",            "fviewbob", "OnOff"
 	Option "$MISCMNU_NOCHEATS",					"nocheats", "OnOff"
 	Option "$MISCMNU_ALLCHEATS",				"allcheats", "OnOff"
 	Option "$MISCMNU_ENABLEAUTOSAVES",			"disableautosave", "Autosave"
@@ -2822,7 +2823,7 @@ OptionValue "os_isanyof_values"
 OptionMenu "vkoptions"
 {
 	Title "$VK_TITLE"
-	StaticText "$VK_WARNING"
+	//StaticText "$VK_WARNING"
 	StaticText "$VK_RESTART"
 	StaticText ""
 	TextField "$VKMNU_DEVICE",			vk_device
