@@ -299,7 +299,7 @@ struct TraceResults native
 class LineTracer : Object native
 {
 	native @TraceResults Results;
-	native bool Trace(vector3 start, Sector sec, vector3 direction, double maxDist, ETraceFlags traceFlags);
+	native bool Trace(vector3 start, Sector sec, vector3 direction, double maxDist, ETraceFlags traceFlags, /* Line::ELineFlags */ uint wallMask = 0xFFFFFFFF, bool ignoreAllActors = false, Actor ignore = null);
 
 	virtual ETraceStatus TraceCallback()
 	{
@@ -409,6 +409,7 @@ struct LevelLocals native
 	native Array<@Line> Lines;
 	native Array<@Side> Sides;
 	native readonly Array<@Vertex> Vertexes;
+	native readonly Array<@LinePortal> LinePortals;
 	native internal Array<@SectorPortal> SectorPortals;
 	
 	native readonly int time;

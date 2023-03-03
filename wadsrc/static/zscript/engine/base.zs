@@ -181,6 +181,7 @@ struct Vector3
 struct _ native	// These are the global variables, the struct is only here to avoid extending the parser for this.
 {
 	native readonly Array<class> AllClasses;
+    native internal readonly Map<Name , Service> AllServices;
 	native readonly bool multiplayer;
 	native @KeyBindings Bindings;
 	native @KeyBindings AutomapBindings;
@@ -686,6 +687,31 @@ struct CVar native
 	native void SetString(String s);
 	native int GetRealType();
 	native int ResetToDefault();
+}
+
+class CustomIntCVar abstract
+{
+    abstract int ModifyValue(Name CVarName, int val);
+}
+
+class CustomFloatCVar abstract
+{
+    abstract double ModifyValue(Name CVarName, double val);
+}
+
+class CustomStringCVar abstract
+{
+    abstract String ModifyValue(Name CVarName, String val);
+}
+
+class CustomBoolCVar abstract
+{
+    abstract bool ModifyValue(Name CVarName, bool val);
+}
+
+class CustomColorCVar abstract
+{
+    abstract Color ModifyValue(Name CVarName, Color val);
 }
 
 struct GIFont version("2.4")

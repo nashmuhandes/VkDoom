@@ -176,6 +176,12 @@ enum : unsigned
 	DF2_NO_EXTRA_AMMO		= 1u << 31,	// Don't add extra ammo when picking up weapons (like in original Doom)
 };
 
+// [Nash] dmflags3 in 2023 let's gooooo
+enum : unsigned
+{
+	DF3_NO_PLAYER_CLIP		= 1 << 0,	// Players can walk through and shoot through each other
+};
+
 // [RH] Compatibility flags.
 enum : unsigned int
 {
@@ -243,6 +249,7 @@ enum
 	BCOMPATF_FLOATBOB			= 1 << 8,	// Use Hexen's original method of preventing floatbobbing items from falling down
 	BCOMPATF_NOSLOPEID			= 1 << 9,	// disable line IDs on slopes.
 	BCOMPATF_CLIPMIDTEX			= 1 << 10,	// Always Clip midtex's in the software renderer (required to run certain GZDoom maps, has no effect in the hardware renderer)
+	BCOMPATF_NOSECTIONMERGE		= 1 << 11,	// (for IWAD maps) keep separate sections for sectors with intra-sector linedefs. 
 };
 
 // phares 3/20/98:

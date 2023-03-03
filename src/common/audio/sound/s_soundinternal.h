@@ -97,11 +97,13 @@ constexpr FSoundID INVALID_SOUND = FSoundID::fromInt(-1);
 	 bool		bUsed = false;
 	 bool		bSingular = false;
 	 bool		bTentative = true;
+	 bool		bExternal = false;
 
 	 TArray<int> UserData;
 
 	 int			RawRate = 0;				// Sample rate to use when bLoadRAW is true
 	 int			LoopStart = -1;				// -1 means no specific loop defined
+	 int			LoopEnd = -1;				// -1 means no specific loop defined
 
 	 FSoundID link = NO_LINK;
 	 constexpr static FSoundID NO_LINK = FSoundID::fromInt(-1);
@@ -120,7 +122,7 @@ struct FSoundChan : public FISoundChannel
 	float		Volume;
 	int 		EntChannel;	// Actor's sound channel.
 	int			UserData;	// Not used by the engine, the caller can use this to store some additional info.
-	int16_t		Pitch;		// Pitch variation.
+	float		Pitch;		// Pitch variation.
 	int16_t		NearLimit;
 	int8_t		Priority;
 	uint8_t		SourceType;

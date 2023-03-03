@@ -548,6 +548,7 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 	if (primaryLevel->info != nullptr)
 		staticEventManager.WorldUnloaded(FString());	// [MK] don't pass the new map, as it's not a level transition
 
+	UnlatchCVars ();
 	if (!savegamerestore)
 	{
 		G_ClearHubInfo();
@@ -557,9 +558,14 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 		// [RH] Mark all levels as not visited
 		for (unsigned int i = 0; i < wadlevelinfos.Size(); i++)
 			wadlevelinfos[i].flags = wadlevelinfos[i].flags & ~LEVEL_VISITED;
+
+		auto redirectmap = FindLevelInfo(mapname);
+		if (redirectmap->RedirectCVAR != NAME_None)
+			redirectmap = redirectmap->CheckLevelRedirect();
+		if (redirectmap && redirectmap->MapName.GetChars()[0])
+				mapname = redirectmap->MapName;
 	}
 
-	UnlatchCVars ();
 	G_VerifySkill();
 	UnlatchCVars ();
 	globalfreeze = globalchangefreeze = 0;
@@ -1385,7 +1391,7 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	{
 		FString mapname = nextmapname;
 		mapname.ToUpper();
-		Printf(PRINT_NONOTIFY, "\n" TEXTCOLOR_NORMAL "%s\n\n" TEXTCOLOR_BOLD "%s - %s\n\n", console_bar, mapname.GetChars(), LevelName.GetChars());
+		Printf(PRINT_HIGH | PRINT_NONOTIFY, "\n" TEXTCOLOR_NORMAL "%s\n\n" TEXTCOLOR_BOLD "%s - %s\n\n", console_bar, mapname.GetChars(), LevelName.GetChars());
 	}
 
 	// Set the sky map.
