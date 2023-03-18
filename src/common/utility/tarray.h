@@ -638,10 +638,13 @@ private:
 
 	void DoDelete (unsigned int first, unsigned int last)
 	{
-		assert (last != ~0u);
-		for (unsigned int i = first; i <= last; ++i)
+		if constexpr (std::is_trivially_destructible<T>::value == false)
 		{
-			Array[i].~T();
+			assert(last != ~0u);
+			for (unsigned int i = first; i <= last; ++i)
+			{
+				Array[i].~T();
+			}
 		}
 	}
 
