@@ -1973,14 +1973,6 @@ subsector_t *FLevelLocals::PointInSubsector(double x, double y)
 {
 	int side;
 
-	if (x == lastCachedSubsectorX && y == lastCachedSubsectorY && lastCachedSubsectorQuery)
-	{
-		return lastCachedSubsectorQuery;
-	}
-
-	lastCachedSubsectorX = x;
-	lastCachedSubsectorY = y;
-
 	auto node = HeadGamenode();
 	if (node == nullptr) return &subsectors[0];
 
@@ -1992,7 +1984,7 @@ subsector_t *FLevelLocals::PointInSubsector(double x, double y)
 		node = (node_t *)node->children[side];
 	} while (!((size_t)node & 1));
 
-	return lastCachedSubsectorQuery = (subsector_t *)((uint8_t *)node - 1);
+	return (subsector_t *)((uint8_t *)node - 1);
 }
 
 //==========================================================================

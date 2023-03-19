@@ -1781,8 +1781,6 @@ void FLevelLocals::Init()
 {
 	P_InitParticles(this);
 	P_ClearParticles(this);
-
-	lastCachedSubsectorQuery = nullptr;
 	
 	gravity = sv_gravity * 35/TICRATE;
 	aircontrol = sv_aircontrol;
