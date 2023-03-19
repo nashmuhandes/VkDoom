@@ -223,10 +223,14 @@ public:
 	{
 		Most = (unsigned)max;
 		Count = (unsigned)(reserve? max : 0);
-		Array = (T *)M_Malloc (sizeof(T)*max);
-		if (reserve && Count > 0)
+		if (Count > 0)
 		{
+			Array = (T *)M_Malloc (sizeof(T)*Count);
 			ConstructEmpty(0, Count - 1);
+		}
+		else
+		{
+			Array = nullptr;
 		}
 	}
 	TArray (const TArray<T,TT> &other)
