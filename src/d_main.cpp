@@ -186,8 +186,6 @@ EXTERN_CVAR (Float, turbo)
 EXTERN_CVAR (Bool, freelook)
 EXTERN_CVAR (Float, m_pitch)
 EXTERN_CVAR (Float, m_yaw)
-EXTERN_CVAR (Bool, invertmouse)
-EXTERN_CVAR (Bool, invertmousex)
 EXTERN_CVAR (Bool, lookstrafe)
 EXTERN_CVAR (Int, screenblocks)
 EXTERN_CVAR (Bool, sv_cheats)
@@ -627,7 +625,7 @@ CUSTOM_CVAR(Int, compatmode, 0, CVAR_ARCHIVE|CVAR_NOINITCALL)
 			COMPATF_TRACE | COMPATF_MISSILECLIP | COMPATF_SOUNDTARGET | COMPATF_NO_PASSMOBJ | COMPATF_LIMITPAIN |
 			COMPATF_DEHHEALTH | COMPATF_INVISIBILITY | COMPATF_CROSSDROPOFF | COMPATF_VILEGHOSTS | COMPATF_HITSCAN |
 			COMPATF_WALLRUN | COMPATF_NOTOSSDROPS | COMPATF_LIGHT | COMPATF_MASKEDMIDTEX;
-		w = COMPATF2_BADANGLES | COMPATF2_FLOORMOVE | COMPATF2_POINTONLINE | COMPATF2_EXPLODE2 | COMPATF2_NOMBF21;
+		w = COMPATF2_BADANGLES | COMPATF2_FLOORMOVE | COMPATF2_POINTONLINE | COMPATF2_EXPLODE2 | COMPATF2_NOMBF21 | COMPATF2_VOODOO_ZOMBIES;
 		break;
 
 	case 3: // Boom compat mode
@@ -2674,15 +2672,12 @@ static bool System_DispatchEvent(event_t* ev)
 		if (buttonMap.ButtonDown(Button_Mlook) || freelook)
 		{
 			int look = int(ev->y * m_pitch * 16.0);
-			if (invertmouse) look = -look;
 			G_AddViewPitch(look, true);
 			ev->y = 0;
 		}
 		if (!buttonMap.ButtonDown(Button_Strafe) && !lookstrafe)
 		{
-			int turn = int(ev->x * m_yaw * 8.0);
-			if (invertmousex)
-				turn = -turn;
+			int turn = int(ev->x * m_yaw * 16.0);
 			G_AddViewAngle(turn, true);
 			ev->x = 0;
 		}
