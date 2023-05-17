@@ -99,6 +99,7 @@
 #include "actorinlines.h"
 #include "a_dynlight.h"
 #include "fragglescript/t_fs.h"
+#include "types.h"
 
 // MACROS ------------------------------------------------------------------
 
@@ -7650,6 +7651,71 @@ DEFINE_FIELD(FDropItem, Name)
 DEFINE_FIELD(FDropItem, Probability)
 DEFINE_FIELD(FDropItem, Amount)
 
+//
+// Actor Info
+//
+
+const char* GetFlagName(PPropFlag* flag)
+{
+	auto cstr = strrchr(flag->SymbolName.GetChars(), '.');
+	return cstr ? cstr + 1 : nullptr;
+}
+
+void PrintCustomActorFlags(AActor* query)
+{
+	if (query)
+	{
+		for (PClass* cls = query->GetClass(); cls && cls->TypeName != NAME_Actor; cls = cls->ParentClass)
+		{
+			bool hasPrintedClassName = false;
+
+			auto it = cls->VMType->Symbols.GetIterator();
+			for (PSymbolTable::MapType::Pair* pair; it.NextPair(pair);)
+			{
+				if (pair)
+				{
+					auto flag = dynamic_cast<PPropFlag*>(pair->Value);
+					if (flag)
+					{
+						PField* var = dyn_cast<PField>(cls->FindSymbol(flag->Offset->SymbolName, false));
+
+						if (var && !(var->Flags & VARF_Native))
+						{
+							uint8_t* addr = reinterpret_cast<uint8_t*>(query) + var->Offset;
+
+							const auto* type = var->Type;
+							if (type->isIntCompatible() && (type->GetValueInt(addr) & (1 << flag->bitval)))
+							{
+								auto flagName = GetFlagName(flag);
+
+								if (flagName)
+								{
+									if (hasPrintedClassName)
+									{
+										Printf(" ");
+									}
+									else
+									{
+										Printf("'%s' flags: ", cls->TypeName.GetChars());
+										hasPrintedClassName = true;
+									}
+
+									Printf("%s", flagName);
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if (hasPrintedClassName)
+			{
+				Printf("\n");
+			}
+		}
+	}
+}
+
 void PrintMiscActorInfo(AActor *query)
 {
 	if (query)
@@ -7720,5 +7786,7 @@ void PrintMiscActorInfo(AActor *query)
 		Printf("Last enemy: %s\n", query->lastenemy ? query->lastenemy->GetClass()->TypeName.GetChars() : "-");
 		auto sn = FState::StaticGetStateName(query->state);
 		Printf("State:%s, Tics: %d\n", sn.GetChars(), query->tics);
+
+		PrintCustomActorFlags(query);
 	}
 }
