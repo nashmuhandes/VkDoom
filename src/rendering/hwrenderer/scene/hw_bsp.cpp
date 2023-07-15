@@ -42,6 +42,7 @@
 #include "hw_clock.h"
 #include "flatvertices.h"
 #include "hw_vertexbuilder.h"
+#include "hw_meshportal.h"
 
 #ifdef ARCH_IA32
 #include <immintrin.h>
@@ -50,6 +51,7 @@
 CVAR(Bool, gl_multithread, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 EXTERN_CVAR(Float, r_actorspriteshadowdist)
+EXTERN_CVAR(Bool, gl_meshcache)
 
 thread_local bool isWorkerThread;
 ctpl::thread_pool renderPool(1);
@@ -106,6 +108,8 @@ void HWDrawInfo::WorkerThread()
 {
 	sector_t *front, *back;
 
+	FRenderState& state = *screen->RenderState(0);
+
 	WTTotal.Clock();
 	isWorkerThread = true;	// for adding asserts in GL API code. The worker thread may never call any GL API.
 	while (true)
@@ -138,18 +142,14 @@ void HWDrawInfo::WorkerThread()
 
 		case RenderJob::WallJob:
 		{
-			HWWall wall;
-			SetupWall.Clock();
-			wall.sub = job->sub;
-
-			front = hw_FakeFlat(job->sub->sector, in_area, false);
+			front = hw_FakeFlat(drawctx, job->sub->sector, in_area, false);
 			auto seg = job->seg;
 			auto backsector = seg->backsector;
 			if (!backsector && seg->linedef->isVisualPortal() && seg->sidedef == seg->linedef->sidedef[0]) // For one-sided portals use the portal's destination sector as backsector.
 			{
 				auto portal = seg->linedef->getPortal();
 				backsector = portal->mDestination->frontsector;
-				back = hw_FakeFlat(backsector, in_area, true);
+				back = hw_FakeFlat(drawctx, backsector, in_area, true);
 				if (front->floorplane.isSlope() || front->ceilingplane.isSlope() || back->floorplane.isSlope() || back->ceilingplane.isSlope())
 				{
 					// Having a one-sided portal like this with slopes is too messy so let's ignore that case.
@@ -164,14 +164,28 @@ void HWDrawInfo::WorkerThread()
 				}
 				else
 				{
-					back = hw_FakeFlat(backsector, in_area, true);
+					back = hw_FakeFlat(drawctx, backsector, in_area, true);
 				}
 			}
 			else back = nullptr;
 
-			wall.Process(this, job->seg, front, back);
-			rendered_lines++;
-			SetupWall.Unclock();
+			if (MeshBSP)
+			{
+				SetupWall.Clock();
+				HWPortalWall portalwall;
+				portalwall.Process(this, state, job->seg, front, back);
+				rendered_lines++;
+				SetupWall.Unclock();
+			}
+			else
+			{
+				HWWall wall;
+				SetupWall.Clock();
+				wall.sub = job->sub;
+				wall.Process(this, state, job->seg, front, back);
+				rendered_lines++;
+				SetupWall.Unclock();
+			}
 			break;
 		}
 
@@ -180,23 +194,23 @@ void HWDrawInfo::WorkerThread()
 			HWFlat flat;
 			SetupFlat.Clock();
 			flat.section = job->sub->section;
-			front = hw_FakeFlat(job->sub->render_sector, in_area, false);
-			flat.ProcessSector(this, front);
+			front = hw_FakeFlat(drawctx, job->sub->render_sector, in_area, false);
+			flat.ProcessSector(this, state, front);
 			SetupFlat.Unclock();
 			break;
 		}
 
 		case RenderJob::SpriteJob:
 			SetupSprite.Clock();
-			front = hw_FakeFlat(job->sub->sector, in_area, false);
-			RenderThings(job->sub, front);
+			front = hw_FakeFlat(drawctx, job->sub->sector, in_area, false);
+			RenderThings(job->sub, front, state);
 			SetupSprite.Unclock();
 			break;
 
 		case RenderJob::ParticleJob:
 			SetupSprite.Clock();
-			front = hw_FakeFlat(job->sub->sector, in_area, false);
-			RenderParticles(job->sub, front);
+			front = hw_FakeFlat(drawctx, job->sub->sector, in_area, false);
+			RenderParticles(job->sub, front, state);
 			SetupSprite.Unclock();
 			break;
 
@@ -247,7 +261,7 @@ void HWDrawInfo::UnclipSubsector(subsector_t *sub)
 //
 //==========================================================================
 
-void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
+void HWDrawInfo::AddLine (seg_t *seg, bool portalclip, FRenderState& state)
 {
 #ifdef _DEBUG
 	if (seg->linedef && seg->linedef->Index() == 38)
@@ -318,7 +332,7 @@ void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
 			// clipping checks are only needed when the backsector is not the same as the front sector
 			if (in_area == area_default) in_area = hw_CheckViewArea(seg->v1, seg->v2, seg->frontsector, seg->backsector);
 
-			backsector = hw_FakeFlat(seg->backsector, in_area, true);
+			backsector = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 			if (hw_CheckClip(seg->sidedef, currentsector, backsector))
 			{
@@ -344,12 +358,20 @@ void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
 			{
 				jobQueue.AddJob(RenderJob::WallJob, seg->Subsector, seg);
 			}
+			else if (MeshBSP)
+			{
+				SetupWall.Clock();
+				HWPortalWall portalwall;
+				portalwall.Process(this, state, seg, currentsector, backsector);
+				rendered_lines++;
+				SetupWall.Unclock();
+			}
 			else
 			{
 				HWWall wall;
 				SetupWall.Clock();
 				wall.sub = seg->Subsector;
-				wall.Process(this, seg, currentsector, backsector);
+				wall.Process(this, state, seg, currentsector, backsector);
 				rendered_lines++;
 				SetupWall.Unclock();
 			}
@@ -366,7 +388,7 @@ void HWDrawInfo::AddLine (seg_t *seg, bool portalclip)
 //
 //==========================================================================
 
-void HWDrawInfo::PolySubsector(subsector_t * sub)
+void HWDrawInfo::PolySubsector(subsector_t * sub, FRenderState& state)
 {
 	int count = sub->numlines;
 	seg_t * line = sub->firstline;
@@ -375,7 +397,7 @@ void HWDrawInfo::PolySubsector(subsector_t * sub)
 	{
 		if (line->linedef)
 		{
-			AddLine (line, mClipPortal != nullptr);
+			AddLine (line, mClipPortal != nullptr, state);
 		}
 		line++;
 	}
@@ -390,7 +412,7 @@ void HWDrawInfo::PolySubsector(subsector_t * sub)
 //
 //==========================================================================
 
-void HWDrawInfo::RenderPolyBSPNode (void *node)
+void HWDrawInfo::RenderPolyBSPNode (void *node, FRenderState& state)
 {
 	while (!((size_t)node & 1))  // Keep going until found a subsector
 	{
@@ -400,7 +422,7 @@ void HWDrawInfo::RenderPolyBSPNode (void *node)
 		int side = R_PointOnSide(viewx, viewy, bsp);
 
 		// Recursively divide front space (toward the viewer).
-		RenderPolyBSPNode (bsp->children[side]);
+		RenderPolyBSPNode (bsp->children[side], state);
 
 		// Possibly divide back space (away from the viewer).
 		side ^= 1;
@@ -413,7 +435,7 @@ void HWDrawInfo::RenderPolyBSPNode (void *node)
 
 		node = bsp->children[side];
 	}
-	PolySubsector ((subsector_t *)((uint8_t *)node - 1));
+	PolySubsector ((subsector_t *)((uint8_t *)node - 1), state);
 }
 
 //==========================================================================
@@ -423,7 +445,7 @@ void HWDrawInfo::RenderPolyBSPNode (void *node)
 //
 //==========================================================================
 
-void HWDrawInfo::AddPolyobjs(subsector_t *sub)
+void HWDrawInfo::AddPolyobjs(subsector_t *sub, FRenderState& state)
 {
 	if (sub->BSP == nullptr || sub->BSP->bDirty)
 	{
@@ -431,11 +453,11 @@ void HWDrawInfo::AddPolyobjs(subsector_t *sub)
 	}
 	if (sub->BSP->Nodes.Size() == 0)
 	{
-		PolySubsector(&sub->BSP->Subsectors[0]);
+		PolySubsector(&sub->BSP->Subsectors[0], state);
 	}
 	else
 	{
-		RenderPolyBSPNode(&sub->BSP->Nodes.Last());
+		RenderPolyBSPNode(&sub->BSP->Nodes.Last(), state);
 	}
 }
 
@@ -446,7 +468,7 @@ void HWDrawInfo::AddPolyobjs(subsector_t *sub)
 //
 //==========================================================================
 
-void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector)
+void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector, FRenderState& state)
 {
 	currentsector = sector;
 	currentsubsector = sub;
@@ -454,7 +476,7 @@ void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector)
 	ClipWall.Clock();
 	if (sub->polys != nullptr)
 	{
-		AddPolyobjs(sub);
+		AddPolyobjs(sub, state);
 	}
 	else
 	{
@@ -465,11 +487,11 @@ void HWDrawInfo::AddLines(subsector_t * sub, sector_t * sector)
 		{
 			if (seg->linedef == nullptr)
 			{
-				if (!(sub->flags & SSECMF_DRAWN)) AddLine(seg, mClipPortal != nullptr);
+				if (!(sub->flags & SSECMF_DRAWN)) AddLine (seg, mClipPortal != nullptr, state);
 			}
 			else if (!(seg->sidedef->Flags & WALLF_POLYOBJ)) 
 			{
-				AddLine (seg, mClipPortal != nullptr);
+				AddLine (seg, mClipPortal != nullptr, state);
 			}
 			seg++;
 		}
@@ -490,7 +512,7 @@ inline bool PointOnLine(const DVector2 &pos, const linebase_t *line)
 	return fabs(v) <= EQUAL_EPSILON;
 }
 
-void HWDrawInfo::AddSpecialPortalLines(subsector_t * sub, sector_t * sector, linebase_t *line)
+void HWDrawInfo::AddSpecialPortalLines(subsector_t * sub, sector_t * sector, linebase_t *line, FRenderState& state)
 {
 	currentsector = sector;
 	currentsubsector = sub;
@@ -504,7 +526,7 @@ void HWDrawInfo::AddSpecialPortalLines(subsector_t * sub, sector_t * sector, lin
 		if (seg->linedef != nullptr && seg->PartnerSeg != nullptr)
 		{
 			if (PointOnLine(seg->v1->fPos(), line) && PointOnLine(seg->v2->fPos(), line))
-				AddLine(seg, false);
+				AddLine(seg, false, state);
 		}
 		seg++;
 	}
@@ -518,7 +540,7 @@ void HWDrawInfo::AddSpecialPortalLines(subsector_t * sub, sector_t * sector, lin
 //
 //==========================================================================
 
-void HWDrawInfo::RenderThings(subsector_t * sub, sector_t * sector)
+void HWDrawInfo::RenderThings(subsector_t * sub, sector_t * sector, FRenderState& state)
 {
 	sector_t * sec=sub->sector;
 	// Handle all things in sector.
@@ -551,11 +573,11 @@ void HWDrawInfo::RenderThings(subsector_t * sub, sector_t * sector)
 				double check = r_actorspriteshadowdist;
 				if (dist <= check * check)
 				{
-					sprite.Process(this, thing, sector, in_area, false, true);
+					sprite.Process(this, state, thing, sector, in_area, false, true);
 				}
 			}
 
-			sprite.Process(this, thing, sector, in_area, false);
+			sprite.Process(this, state, thing, sector, in_area, false);
 		}
 	}
 	
@@ -582,15 +604,15 @@ void HWDrawInfo::RenderThings(subsector_t * sub, sector_t * sector)
 			double check = r_actorspriteshadowdist;
 			if (dist <= check * check)
 			{
-				sprite.Process(this, thing, sector, in_area, true, true);
+				sprite.Process(this, state, thing, sector, in_area, true, true);
 			}
 		}
 
-		sprite.Process(this, thing, sector, in_area, true);
+		sprite.Process(this, state, thing, sector, in_area, true);
 	}
 }
 
-void HWDrawInfo::RenderParticles(subsector_t *sub, sector_t *front)
+void HWDrawInfo::RenderParticles(subsector_t *sub, sector_t *front, FRenderState& state)
 {
 	SetupSprite.Clock();
 	for (int i = Level->ParticlesInSubsec[sub->Index()]; i != NO_PARTICLE; i = Level->Particles[i].snext)
@@ -602,7 +624,7 @@ void HWDrawInfo::RenderParticles(subsector_t *sub, sector_t *front)
 		}
 
 		HWSprite sprite;
-		sprite.ProcessParticle(this, &Level->Particles[i], front);
+		sprite.ProcessParticle(this, state, &Level->Particles[i], front);
 	}
 	SetupSprite.Unclock();
 }
@@ -617,7 +639,7 @@ void HWDrawInfo::RenderParticles(subsector_t *sub, sector_t *front)
 //
 //==========================================================================
 
-void HWDrawInfo::DoSubsector(subsector_t * sub)
+void HWDrawInfo::DoSubsector(subsector_t * sub, FRenderState& state)
 {
 	sector_t * sector;
 	sector_t * fakesector;
@@ -645,7 +667,7 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 	}
 	if (mClipper->IsBlocked()) return;	// if we are inside a stacked sector portal which hasn't unclipped anything yet.
 
-	fakesector=hw_FakeFlat(sector, in_area, false);
+	fakesector=hw_FakeFlat(drawctx, sector, in_area, false);
 
 	if (mClipPortal)
 	{
@@ -654,14 +676,14 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 		{
 			auto line = mClipPortal->ClipLine();
 			// The subsector is out of range, but we still have to check lines that lie directly on the boundary and may expose their upper or lower parts.
-			if (line) AddSpecialPortalLines(sub, fakesector, line);
+			if (line) AddSpecialPortalLines(sub, fakesector, line, state);
 			return;
 		}
 	}
 
 	if (sector->validcount != validcount)
 	{
-		CheckUpdate(screen->mVertexData, sector);
+		CheckUpdate(state, sector);
 	}
 
 	// [RH] Add particles
@@ -674,12 +696,12 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 		else
 		{
 			SetupSprite.Clock();
-			RenderParticles(sub, fakesector);
+			RenderParticles(sub, fakesector, state);
 			SetupSprite.Unclock();
 		}
 	}
 
-	AddLines(sub, fakesector);
+	AddLines(sub, fakesector, state);
 
 	// BSP is traversed by subsector.
 	// A sector might have been split into several
@@ -700,7 +722,7 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 			else
 			{
 				SetupSprite.Clock();
-				RenderThings(sub, fakesector);
+				RenderThings(sub, fakesector, state);
 				SetupSprite.Unclock();
 			}
 		}
@@ -722,7 +744,7 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 					sector = sub->render_sector;
 					// the planes of this subsector are faked to belong to another sector
 					// This means we need the heightsec parts and light info of the render sector, not the actual one.
-					fakesector = hw_FakeFlat(sector, in_area, false);
+					fakesector = hw_FakeFlat(drawctx, sector, in_area, false);
 				}
 
 				uint8_t &srf = section_renderflags[Level->sections.SectionIndex(sub->section)];
@@ -730,17 +752,20 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 				{
 					srf |= SSRF_PROCESSED;
 
-					if (multithread)
+					if (!MeshBSP)
 					{
-						jobQueue.AddJob(RenderJob::FlatJob, sub);
-					}
-					else
-					{
-						HWFlat flat;
-						flat.section = sub->section;
-						SetupFlat.Clock();
-						flat.ProcessSector(this, fakesector);
-						SetupFlat.Unclock();
+						if (multithread)
+						{
+							jobQueue.AddJob(RenderJob::FlatJob, sub);
+						}
+						else
+						{
+							HWFlat flat;
+							flat.section = sub->section;
+							SetupFlat.Clock();
+							flat.ProcessSector(this, state, fakesector);
+							SetupFlat.Unclock();
+						}
 					}
 				}
 				// mark subsector as processed - but mark for rendering only if it has an actual area.
@@ -798,11 +823,11 @@ void HWDrawInfo::DoSubsector(subsector_t * sub)
 //
 //==========================================================================
 
-void HWDrawInfo::RenderBSPNode (void *node)
+void HWDrawInfo::RenderBSPNode (void *node, FRenderState& state)
 {
 	if (Level->nodes.Size() == 0)
 	{
-		DoSubsector (&Level->subsectors[0]);
+		DoSubsector (&Level->subsectors[0], state);
 		return;
 	}
 	while (!((size_t)node & 1))  // Keep going until found a subsector
@@ -813,7 +838,7 @@ void HWDrawInfo::RenderBSPNode (void *node)
 		int side = R_PointOnSide(viewx, viewy, bsp);
 
 		// Recursively divide front space (toward the viewer).
-		RenderBSPNode (bsp->children[side]);
+		RenderBSPNode (bsp->children[side], state);
 
 		// Possibly divide back space (away from the viewer).
 		side ^= 1;
@@ -827,10 +852,10 @@ void HWDrawInfo::RenderBSPNode (void *node)
 
 		node = bsp->children[side];
 	}
-	DoSubsector ((subsector_t *)((uint8_t *)node - 1));
+	DoSubsector ((subsector_t *)((uint8_t *)node - 1), state);
 }
 
-void HWDrawInfo::RenderBSP(void *node, bool drawpsprites)
+void HWDrawInfo::RenderBSP(void *node, bool drawpsprites, FRenderState& state)
 {
 	Bsp.Clock();
 
@@ -840,6 +865,7 @@ void HWDrawInfo::RenderBSP(void *node, bool drawpsprites)
 
 	validcount++;	// used for processing sidedefs only once by the renderer.
 
+	MeshBSP = gl_meshcache;
 	multithread = gl_multithread;
 	if (multithread)
 	{
@@ -847,7 +873,7 @@ void HWDrawInfo::RenderBSP(void *node, bool drawpsprites)
 		auto future = renderPool.push([&](int id) {
 			WorkerThread();
 		});
-		RenderBSPNode(node);
+		RenderBSPNode(node, state);
 
 		jobQueue.AddJob(RenderJob::TerminateJob, nullptr, nullptr);
 		Bsp.Unclock();
@@ -857,12 +883,12 @@ void HWDrawInfo::RenderBSP(void *node, bool drawpsprites)
 	}
 	else
 	{
-		RenderBSPNode(node);
+		RenderBSPNode(node, state);
 		Bsp.Unclock();
 	}
 	// Process all the sprites on the current portal's back side which touch the portal.
-	if (mCurrentPortal != nullptr) mCurrentPortal->RenderAttached(this);
+	if (mCurrentPortal != nullptr) mCurrentPortal->RenderAttached(this, state);
 
 	if (drawpsprites)
-		PreparePlayerSprites(Viewpoint.sector, in_area);
+		PreparePlayerSprites(Viewpoint.sector, in_area, state);
 }

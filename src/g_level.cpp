@@ -146,7 +146,7 @@ CUSTOM_CVAR(Bool, gl_notexturefill, false, CVAR_NOINITCALL)
 	}
 }
 
-CUSTOM_CVAR(Int, gl_lightmode, 3, CVAR_ARCHIVE | CVAR_NOINITCALL)
+CUSTOM_CVAR(Int, gl_lightmode, 8, CVAR_ARCHIVE | CVAR_NOINITCALL)
 {
 	int newself = self;
 	if (newself > 8) newself = 16;	// use 8 and 16 for software lighting to avoid conflicts with the bit mask ( in hindsight a bad idea.)
@@ -1425,6 +1425,10 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	{
 		flags2 |= LEVEL2_PRERAISEWEAPON;
 	}
+	if (changeflags & CHANGELEVEL_NOAUTOSAVE)
+	{
+		flags9 |= LEVEL9_NOAUTOSAVEONENTER;
+	}
 
 	maptime = 0;
 
@@ -1508,6 +1512,12 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	localEventManager->WorldLoaded();
 	DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
 	
+
+	// [Nash] allow modder control of autosaving
+	if (flags9 & LEVEL9_NOAUTOSAVEONENTER)
+	{
+		autosave = false;
+	}
 
 	// [RH] Always save the game when entering a new 
 	if (autosave && !savegamerestore && disableautosave < 1)
@@ -1789,6 +1799,7 @@ void FLevelLocals::Init()
 	flags = 0;
 	flags2 = 0;
 	flags3 = 0;
+	flags9 = 0;
 	ImpactDecalCount = 0;
 	frozenstate = 0;
 
@@ -1837,6 +1848,7 @@ void FLevelLocals::Init()
 	flags |= info->flags;
 	flags2 |= info->flags2;
 	flags3 |= info->flags3;
+	flags9 |= info->flags9;
 	levelnum = info->levelnum;
 	Music = info->Music;
 	musicorder = info->musicorder;

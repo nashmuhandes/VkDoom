@@ -72,7 +72,7 @@ public:
 	virtual void SetSubData(size_t offset, size_t size, const void *data) = 0;
 	virtual void *Lock(unsigned int size) = 0;
 	virtual void Unlock() = 0;
-	virtual void Resize(size_t newsize) = 0;
+	//virtual void Resize(size_t newsize) = 0;
 
 	virtual void Upload(size_t start, size_t size) {} // For unmappable buffers
 
@@ -80,28 +80,4 @@ public:
 	virtual void Unmap() {}
 	void *Memory() { return map; }
 	size_t Size() { return buffersize; }
-	virtual void GPUDropSync() {}
-	virtual void GPUWaitSync() {}
-};
-
-class IVertexBuffer : virtual public IBuffer
-{
-public:
-	virtual void SetFormat(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute *attrs) = 0;
-};
-
-// This merely exists to have a dedicated type for index buffers to inherit from.
-class IIndexBuffer : virtual public IBuffer
-{
-	// Element size is fixed to 4, thanks to OpenGL requiring this info to be coded into the glDrawElements call.
-	// This mostly prohibits a more flexible buffer setup but GZDoom doesn't use any other format anyway.
-	// Ob Vulkam, element size is a buffer property and of no concern to the drawing functions (as it should be.)
-};
-
-class IDataBuffer : virtual public IBuffer
-{
-	// Can be either uniform or shader storage buffer, depending on its needs.
-public:
-	virtual void BindRange(FRenderState *state, size_t start, size_t length) = 0;
-
 };

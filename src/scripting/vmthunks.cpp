@@ -1139,6 +1139,29 @@ DEFINE_ACTION_FUNCTION_NATIVE(_Sector, SetXOffset, SetXOffset)
 	 ACTION_RETURN_INT(self->e->XFloor.attached.Size());
  }
 
+ static int CountSectorTags(const sector_t *self)
+ {
+	 return level.tagManager.CountSectorTags(self);
+ }
+
+ DEFINE_ACTION_FUNCTION_NATIVE(_Sector, CountTags, CountSectorTags)
+ {
+	 PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	 ACTION_RETURN_INT(level.tagManager.CountSectorTags(self));
+ }
+
+ static int GetSectorTag(const sector_t *self, int index)
+ {
+	 return level.tagManager.GetSectorTag(self, index);
+ }
+
+ DEFINE_ACTION_FUNCTION_NATIVE(_Sector, GetTag, GetSectorTag)
+ {
+	 PARAM_SELF_STRUCT_PROLOGUE(sector_t);
+	 PARAM_INT(index);
+	 ACTION_RETURN_INT(level.tagManager.GetSectorTag(self, index));
+ }
+
  static int Get3DFloorTexture(F3DFloor *self, int pos)
  {
  	 if ( pos )
@@ -1238,6 +1261,29 @@ DEFINE_ACTION_FUNCTION_NATIVE(_Sector, SetXOffset, SetXOffset)
  {
 	 PARAM_SELF_STRUCT_PROLOGUE(line_t);
 	 ACTION_RETURN_INT(LineIndex(self));
+ }
+
+ static int CountLineIDs(const line_t *self)
+ {
+	 return level.tagManager.CountLineIDs(self);
+ }
+
+ DEFINE_ACTION_FUNCTION_NATIVE(_Line, CountIDs, CountLineIDs)
+ {
+	 PARAM_SELF_STRUCT_PROLOGUE(line_t);
+	 ACTION_RETURN_INT(level.tagManager.CountLineIDs(self));
+ }
+
+ static int GetLineID(const line_t *self, int index)
+ {
+	 return level.tagManager.GetLineID(self, index);
+ }
+
+ DEFINE_ACTION_FUNCTION_NATIVE(_Line, GetID, GetLineID)
+ {
+	 PARAM_SELF_STRUCT_PROLOGUE(line_t);
+	 PARAM_INT(index);
+	 ACTION_RETURN_INT(level.tagManager.GetLineID(self, index));
  }
 
  //===========================================================================
@@ -2717,6 +2763,7 @@ DEFINE_FIELD_X(LevelInfo, level_info_t, sucktime)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags2)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags3)
+DEFINE_FIELD_X(LevelInfo, level_info_t, flags9)
 DEFINE_FIELD_X(LevelInfo, level_info_t, Music)
 DEFINE_FIELD_X(LevelInfo, level_info_t, LevelName)
 DEFINE_FIELD_X(LevelInfo, level_info_t, AuthorName)
@@ -2805,6 +2852,8 @@ DEFINE_FIELD_BIT(FLevelLocals, flags2, infinite_flight, LEVEL2_INFINITE_FLIGHT)
 DEFINE_FIELD_BIT(FLevelLocals, flags2, no_dlg_freeze, LEVEL2_CONV_SINGLE_UNFREEZE)
 DEFINE_FIELD_BIT(FLevelLocals, flags2, keepfullinventory, LEVEL2_KEEPFULLINVENTORY)
 DEFINE_FIELD_BIT(FLevelLocals, flags3, removeitems, LEVEL3_REMOVEITEMS)
+DEFINE_FIELD_BIT(FLevelLocals, flags9, nousersave, LEVEL9_NOUSERSAVE)
+DEFINE_FIELD_BIT(FLevelLocals, flags9, noautomap, LEVEL9_NOAUTOMAP)
 
 DEFINE_FIELD_X(Sector, sector_t, floorplane)
 DEFINE_FIELD_X(Sector, sector_t, ceilingplane)

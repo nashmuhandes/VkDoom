@@ -33,12 +33,12 @@
 #include "a_dynlight.h"
 #include "texturemanager.h"
 
+#include "hw_drawcontext.h"
 #include "hw_drawinfo.h"
 #include "hw_drawstructs.h"
 #include "hw_clock.h"
 #include "hw_dynlightdata.h"
 #include "flatvertices.h"
-#include "hw_lightbuffer.h"
 #include "hwrenderer/scene/hw_portal.h"
 #include "hw_fakeflat.h"
 
@@ -48,7 +48,7 @@
 //
 //==========================================================================
 
-void HWDrawInfo::DispatchRenderHacks()
+void HWDrawInfo::DispatchRenderHacks(FRenderState& state)
 {
 	TMap<int, gl_subsectorrendernode*>::Pair *pair;
 	TMap<int, gl_floodrendernode*>::Pair *fpair;
@@ -57,29 +57,29 @@ void HWDrawInfo::DispatchRenderHacks()
 	glflat.section = nullptr;
 	while (ofi.NextPair(pair))
 	{
-		auto sec = hw_FakeFlat(&Level->sectors[pair->Key], in_area, false);
-		glflat.ProcessSector(this, sec, SSRF_RENDERFLOOR | SSRF_PLANEHACK);
+		auto sec = hw_FakeFlat(drawctx, &Level->sectors[pair->Key], in_area, false);
+		glflat.ProcessSector(this, state, sec, SSRF_RENDERFLOOR | SSRF_PLANEHACK);
 	}
 
 	TMap<int, gl_subsectorrendernode*>::Iterator oci(otherCeilingPlanes);
 	while (oci.NextPair(pair))
 	{
-		auto sec = hw_FakeFlat(&Level->sectors[pair->Key], in_area, false);
-		glflat.ProcessSector(this, sec, SSRF_RENDERCEILING | SSRF_PLANEHACK);
+		auto sec = hw_FakeFlat(drawctx, &Level->sectors[pair->Key], in_area, false);
+		glflat.ProcessSector(this, state, sec, SSRF_RENDERCEILING | SSRF_PLANEHACK);
 	}
 
 	TMap<int, gl_floodrendernode*>::Iterator ffi(floodFloorSegs);
 	while (ffi.NextPair(fpair))
 	{
-		auto sec = hw_FakeFlat(&Level->sectors[fpair->Key], in_area, false);
-		glflat.ProcessSector(this, sec, SSRF_RENDERFLOOR | SSRF_FLOODHACK);
+		auto sec = hw_FakeFlat(drawctx, &Level->sectors[fpair->Key], in_area, false);
+		glflat.ProcessSector(this, state, sec, SSRF_RENDERFLOOR | SSRF_FLOODHACK);
 	}
 
 	TMap<int, gl_floodrendernode*>::Iterator fci(floodCeilingSegs);
 	while (fci.NextPair(fpair))
 	{
-		auto sec = hw_FakeFlat(&Level->sectors[fpair->Key], in_area, false);
-		glflat.ProcessSector(this, sec, SSRF_RENDERCEILING | SSRF_FLOODHACK);
+		auto sec = hw_FakeFlat(drawctx, &Level->sectors[fpair->Key], in_area, false);
+		glflat.ProcessSector(this, state, sec, SSRF_RENDERCEILING | SSRF_FLOODHACK);
 	}
 }
 
@@ -90,14 +90,14 @@ void HWDrawInfo::DispatchRenderHacks()
 //
 //==========================================================================
 
-static gl_subsectorrendernode *NewSubsectorRenderNode()
+static gl_subsectorrendernode *NewSubsectorRenderNode(HWDrawContext* drawctx)
 {
-    return (gl_subsectorrendernode*)RenderDataAllocator.Alloc(sizeof(gl_subsectorrendernode));
+    return (gl_subsectorrendernode*)drawctx->RenderDataAllocator.Alloc(sizeof(gl_subsectorrendernode));
 }
 
-static gl_floodrendernode *NewFloodRenderNode()
+static gl_floodrendernode *NewFloodRenderNode(HWDrawContext* drawctx)
 {
-    return (gl_floodrendernode*)RenderDataAllocator.Alloc(sizeof(gl_floodrendernode));
+    return (gl_floodrendernode*)drawctx->RenderDataAllocator.Alloc(sizeof(gl_floodrendernode));
 }
 
 //==========================================================================
@@ -108,7 +108,7 @@ static gl_floodrendernode *NewFloodRenderNode()
 //
 //==========================================================================
 
-int HWDrawInfo::SetupLightsForOtherPlane(subsector_t * sub, FDynLightData &lightdata, const secplane_t *plane)
+int HWDrawInfo::SetupLightsForOtherPlane(subsector_t * sub, FDynLightData &lightdata, const secplane_t *plane, FRenderState& state)
 {
 	if (Level->HasDynamicLights && !isFullbrightScene())
 	{
@@ -133,7 +133,7 @@ int HWDrawInfo::SetupLightsForOtherPlane(subsector_t * sub, FDynLightData &light
 			node = node->nextLight;
 		}
 
-		return screen->mLights->UploadLights(lightdata);
+		return state.UploadLights(lightdata);
 	}
 	else return -1;
 }
@@ -144,9 +144,9 @@ int HWDrawInfo::SetupLightsForOtherPlane(subsector_t * sub, FDynLightData &light
 //
 //==========================================================================
 
-int HWDrawInfo::CreateOtherPlaneVertices(subsector_t *sub, const secplane_t *plane)
+int HWDrawInfo::CreateOtherPlaneVertices(subsector_t *sub, const secplane_t *plane, FRenderState& state)
 {
-	auto alloc = screen->mVertexData->AllocVertices(sub->numlines);
+	auto alloc = state.AllocVertices(sub->numlines);
 	auto ptr = alloc.first;
 	for (unsigned int k = 0; k < sub->numlines; k++)
 	{
@@ -167,23 +167,23 @@ int HWDrawInfo::CreateOtherPlaneVertices(subsector_t *sub, const secplane_t *pla
 //
 //==========================================================================
 
-void HWDrawInfo::AddOtherFloorPlane(int sector, gl_subsectorrendernode * node)
+void HWDrawInfo::AddOtherFloorPlane(int sector, gl_subsectorrendernode* node, FRenderState& state)
 {
     auto pNode = otherFloorPlanes.CheckKey(sector);
     
 	node->next = pNode? *pNode : nullptr;
-	node->lightindex = SetupLightsForOtherPlane(node->sub, lightdata, &Level->sectors[sector].floorplane);
-	node->vertexindex = CreateOtherPlaneVertices(node->sub, &Level->sectors[sector].floorplane);
+	node->lightindex = SetupLightsForOtherPlane(node->sub, lightdata, &Level->sectors[sector].floorplane, state);
+	node->vertexindex = CreateOtherPlaneVertices(node->sub, &Level->sectors[sector].floorplane, state);
 	otherFloorPlanes[sector] = node;
 }
 
-void HWDrawInfo::AddOtherCeilingPlane(int sector, gl_subsectorrendernode * node)
+void HWDrawInfo::AddOtherCeilingPlane(int sector, gl_subsectorrendernode* node, FRenderState& state)
 {
     auto pNode = otherCeilingPlanes.CheckKey(sector);
     
     node->next = pNode? *pNode : nullptr;
-	node->lightindex = SetupLightsForOtherPlane(node->sub, lightdata, &Level->sectors[sector].ceilingplane);
-	node->vertexindex = CreateOtherPlaneVertices(node->sub, &Level->sectors[sector].ceilingplane);
+	node->lightindex = SetupLightsForOtherPlane(node->sub, lightdata, &Level->sectors[sector].ceilingplane, state);
+	node->vertexindex = CreateOtherPlaneVertices(node->sub, &Level->sectors[sector].ceilingplane, state);
 	otherCeilingPlanes[sector] = node;
 }
 
@@ -336,7 +336,7 @@ bool HWDrawInfo::DoOneSectorUpper(subsector_t * subsec, float Planez, area_t in_
 			// Note: if this is a real line between sectors
 			// we can be sure that render_sector is the real sector!
 
-			sector_t * sec = hw_FakeFlat(seg->backsector, in_area, true);
+			sector_t * sec = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 			// Don't bother with slopes
 			if (sec->ceilingplane.isSlope())  return false;
@@ -394,7 +394,7 @@ bool HWDrawInfo::DoOneSectorLower(subsector_t * subsec, float Planez, area_t in_
 			// Note: if this is a real line between sectors
 			// we can be sure that render_sector is the real sector!
 
-			sector_t * sec = hw_FakeFlat(seg->backsector, in_area, true);
+			sector_t * sec = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 			// Don't bother with slopes
 			if (sec->floorplane.isSlope())  return false;
@@ -453,7 +453,7 @@ bool HWDrawInfo::DoFakeBridge(subsector_t * subsec, float Planez, area_t in_area
 			// Note: if this is a real line between sectors
 			// we can be sure that render_sector is the real sector!
 
-			sector_t * sec = hw_FakeFlat(seg->backsector, in_area, true);
+			sector_t * sec = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 			// Don't bother with slopes
 			if (sec->floorplane.isSlope())  return false;
@@ -506,7 +506,7 @@ bool HWDrawInfo::DoFakeCeilingBridge(subsector_t * subsec, float Planez, area_t 
 			// Note: if this is a real line between sectors
 			// we can be sure that render_sector is the real sector!
 
-			sector_t * sec = hw_FakeFlat(seg->backsector, in_area, true);
+			sector_t * sec = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 			// Don't bother with slopes
 			if (sec->ceilingplane.isSlope())  return false;
@@ -536,7 +536,7 @@ bool HWDrawInfo::DoFakeCeilingBridge(subsector_t * subsec, float Planez, area_t 
 // Draws the fake planes
 //
 //==========================================================================
-void HWDrawInfo::HandleMissingTextures(area_t in_area)
+void HWDrawInfo::HandleMissingTextures(area_t in_area, FRenderState& state)
 {
 	for (unsigned int i = 0; i < MissingUpperTextures.Size(); i++)
 	{
@@ -554,10 +554,10 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 				sector_t * sec = MissingUpperTextures[i].seg->backsector;
 				for (unsigned int j = 0; j < HandledSubsectors.Size(); j++)
 				{
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
 
-					AddOtherCeilingPlane(sec->sectornum, node);
+					AddOtherCeilingPlane(sec->sectornum, node, state);
 				}
 
 				if (HandledSubsectors.Size() != 1)
@@ -587,7 +587,7 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 
 		{
 			// It isn't a hole. Now check whether it might be a fake bridge
-			sector_t * fakesector = hw_FakeFlat(MissingUpperTextures[i].seg->frontsector, in_area, false);
+			sector_t * fakesector = hw_FakeFlat(drawctx, MissingUpperTextures[i].seg->frontsector, in_area, false);
 			float planez = (float)fakesector->GetPlaneTexZ(sector_t::ceiling);
 
 			backsub->validcount = validcount;
@@ -595,9 +595,9 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 			{
 				for (unsigned int j = 0; j < HandledSubsectors.Size(); j++)
 				{
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
-					AddOtherCeilingPlane(fakesector->sectornum, node);
+					AddOtherCeilingPlane(fakesector->sectornum, node, state);
 				}
 			}
 			continue;
@@ -621,9 +621,9 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 
 				for (unsigned int j = 0; j < HandledSubsectors.Size(); j++)
 				{
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
-					AddOtherFloorPlane(sec->sectornum, node);
+					AddOtherFloorPlane(sec->sectornum, node, state);
 				}
 
 				if (HandledSubsectors.Size() != 1)
@@ -653,7 +653,7 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 
 		{
 			// It isn't a hole. Now check whether it might be a fake bridge
-			sector_t * fakesector = hw_FakeFlat(MissingLowerTextures[i].seg->frontsector, in_area, false);
+			sector_t * fakesector = hw_FakeFlat(drawctx, MissingLowerTextures[i].seg->frontsector, in_area, false);
 			float planez = (float)fakesector->GetPlaneTexZ(sector_t::floor);
 
 			backsub->validcount = validcount;
@@ -661,9 +661,9 @@ void HWDrawInfo::HandleMissingTextures(area_t in_area)
 			{
 				for (unsigned int j = 0; j < HandledSubsectors.Size(); j++)
 				{
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
-					AddOtherFloorPlane(fakesector->sectornum, node);
+					AddOtherFloorPlane(fakesector->sectornum, node, state);
 				}
 			}
 			continue;
@@ -724,11 +724,11 @@ void HWDrawInfo::CreateFloodPoly(wallseg * ws, FFlatVertex *vertices, float plan
 //
 //==========================================================================
 
-void HWDrawInfo::PrepareUpperGap(seg_t * seg)
+void HWDrawInfo::PrepareUpperGap(seg_t * seg, FRenderState& state)
 {
 	wallseg ws;
-	sector_t * fakefsector = hw_FakeFlat(seg->frontsector, in_area, false);
-	sector_t * fakebsector = hw_FakeFlat(seg->backsector, in_area, true);
+	sector_t * fakefsector = hw_FakeFlat(drawctx, seg->frontsector, in_area, false);
+	sector_t * fakebsector = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 	vertex_t * v1, *v2;
 
@@ -759,12 +759,12 @@ void HWDrawInfo::PrepareUpperGap(seg_t * seg)
 	ws.z1 = frontz;
 	ws.z2 = backz;
 
-	auto vertices = screen->mVertexData->AllocVertices(8);
+	auto vertices = state.AllocVertices(8);
 
 	CreateFloodStencilPoly(&ws, vertices.first);
 	CreateFloodPoly(&ws, vertices.first+4, ws.z2, fakebsector, true);
 
-	gl_floodrendernode *node = NewFloodRenderNode();
+	gl_floodrendernode *node = NewFloodRenderNode(drawctx);
     auto pNode = floodCeilingSegs.CheckKey(fakebsector->sectornum);
 
     node->next = pNode? *pNode : nullptr;
@@ -780,11 +780,11 @@ void HWDrawInfo::PrepareUpperGap(seg_t * seg)
 //
 //==========================================================================
 
-void HWDrawInfo::PrepareLowerGap(seg_t * seg)
+void HWDrawInfo::PrepareLowerGap(seg_t * seg, FRenderState& state)
 {
 	wallseg ws;
-	sector_t * fakefsector = hw_FakeFlat(seg->frontsector, in_area, false);
-	sector_t * fakebsector = hw_FakeFlat(seg->backsector, in_area, true);
+	sector_t * fakefsector = hw_FakeFlat(drawctx, seg->frontsector, in_area, false);
+	sector_t * fakebsector = hw_FakeFlat(drawctx, seg->backsector, in_area, true);
 
 	vertex_t * v1, *v2;
 
@@ -816,12 +816,12 @@ void HWDrawInfo::PrepareLowerGap(seg_t * seg)
 	ws.z2 = frontz;
 	ws.z1 = backz;
 
-	auto vertices = screen->mVertexData->AllocVertices(8);
+	auto vertices = state.AllocVertices(8);
 
 	CreateFloodStencilPoly(&ws, vertices.first);
 	CreateFloodPoly(&ws, vertices.first+4, ws.z1, fakebsector, false);
 
-	gl_floodrendernode *node = NewFloodRenderNode();
+	gl_floodrendernode *node = NewFloodRenderNode(drawctx);
     auto pNode = floodFloorSegs.CheckKey(fakebsector->sectornum);
     
     node->next = pNode? *pNode : nullptr;
@@ -837,7 +837,7 @@ void HWDrawInfo::PrepareLowerGap(seg_t * seg)
 //
 //==========================================================================
 
-void HWDrawInfo::PrepareUnhandledMissingTextures()
+void HWDrawInfo::PrepareUnhandledMissingTextures(FRenderState& state)
 {
 	if (!Level->notexturefill)
 	{
@@ -860,7 +860,7 @@ void HWDrawInfo::PrepareUnhandledMissingTextures()
 			if (seg->backsector->GetTexture(sector_t::ceiling) == skyflatnum) continue;
 			if (seg->backsector->ValidatePortal(sector_t::ceiling) != NULL) continue;
 
-			PrepareUpperGap(seg);
+			PrepareUpperGap(seg, state);
 		}
 
 		validcount++;
@@ -878,7 +878,7 @@ void HWDrawInfo::PrepareUnhandledMissingTextures()
 			if (seg->backsector->GetTexture(sector_t::floor) == skyflatnum) continue;
 			if (seg->backsector->ValidatePortal(sector_t::floor) != NULL) continue;
 
-			PrepareLowerGap(seg);
+			PrepareLowerGap(seg, state);
 		}
 	}
 	MissingUpperTextures.Clear();
@@ -1111,19 +1111,19 @@ bool HWDrawInfo::CollectSubsectorsCeiling(subsector_t * sub, sector_t * anchor)
 //
 //==========================================================================
 
-void HWDrawInfo::ProcessLowerMinisegs(TArray<seg_t *> &lowersegs)
+void HWDrawInfo::ProcessLowerMinisegs(TArray<seg_t *> &lowersegs, FRenderState& state)
 {
     for(unsigned int j=0;j<lowersegs.Size();j++)
     {
         seg_t * seg=lowersegs[j];
         HWWall wall;
-        wall.ProcessLowerMiniseg(this, seg, seg->Subsector->render_sector, seg->PartnerSeg->Subsector->render_sector);
+        wall.ProcessLowerMiniseg(this, state, seg, seg->Subsector->render_sector, seg->PartnerSeg->Subsector->render_sector);
         rendered_lines++;
     }
 }
 
 
-void HWDrawInfo::HandleHackedSubsectors()
+void HWDrawInfo::HandleHackedSubsectors(FRenderState& state)
 {
 	viewsubsector = Level->PointInRenderSubsector(Viewpoint.Pos);
 
@@ -1142,11 +1142,11 @@ void HWDrawInfo::HandleHackedSubsectors()
 			{
 				for(unsigned int j=0;j<HandledSubsectors.Size();j++)
 				{				
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
-					AddOtherFloorPlane(sub->render_sector->sectornum, node);
+					AddOtherFloorPlane(sub->render_sector->sectornum, node, state);
 				}
-                if (inview) ProcessLowerMinisegs(lowersegs);
+                if (inview) ProcessLowerMinisegs(lowersegs, state);
 			}
 		}
 	}
@@ -1164,9 +1164,9 @@ void HWDrawInfo::HandleHackedSubsectors()
 			{
 				for(unsigned int j=0;j<HandledSubsectors.Size();j++)
 				{				
-                    gl_subsectorrendernode * node = NewSubsectorRenderNode();
+                    gl_subsectorrendernode * node = NewSubsectorRenderNode(drawctx);
 					node->sub = HandledSubsectors[j];
-					AddOtherCeilingPlane(sub->render_sector->sectornum, node);
+					AddOtherCeilingPlane(sub->render_sector->sectornum, node, state);
 				}
 			}
 		}

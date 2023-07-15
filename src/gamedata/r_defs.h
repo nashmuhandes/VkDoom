@@ -61,7 +61,6 @@ class AActor;
 struct FSection;
 struct FLevelLocals;
 struct LightmapSurface;
-struct LightProbe;
 
 const uint16_t NO_INDEX = 0xffffu;
 const uint32_t NO_SIDE = 0xffffffffu;
@@ -707,7 +706,7 @@ struct sector_t
 
 	int				vboindex[4];	// VBO indices of the 4 planes this sector uses during rendering. This is only needed for updating plane heights.
 	int				iboindex[4];	// IBO indices of the 4 planes this sector uses during rendering
-	double			vboheight[HW_MAX_PIPELINE_BUFFERS][2];	// Last calculated height for the 2 planes of this actual sector
+	double			vboheight[2];	// Last calculated height for the 2 planes of this actual sector
 	int				vbocount[2];	// Total count of vertices belonging to this sector's planes. This is used when a sector height changes and also contains all attached planes.
 	int				ibocount;		// number of indices per plane (identical for all planes.) If this is -1 the index buffer is not in use.
 
@@ -1708,18 +1707,6 @@ struct LightmapSurface
 	sector_t *ControlSector;
 	uint32_t LightmapNum;
 	float *TexCoords;
-};
-
-struct LightProbe
-{
-	float X, Y, Z;
-	float Red, Green, Blue;
-};
-
-struct LightProbeCell
-{
-	LightProbe* FirstProbe = nullptr;
-	int NumProbes = 0;
 };
 
 //

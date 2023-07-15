@@ -56,7 +56,6 @@
 #include "hw_lighting.h"
 #include "hw_material.h"
 #include "hw_dynlightdata.h"
-#include "hw_lightbuffer.h"
 #include "hw_renderstate.h"
 
 extern TArray<spritedef_t> sprites;
@@ -69,6 +68,7 @@ EXTERN_CVAR(Bool, r_debug_disable_vis_filter)
 EXTERN_CVAR(Float, transsouls)
 EXTERN_CVAR(Float, r_actorspriteshadowalpha)
 EXTERN_CVAR(Float, r_actorspriteshadowfadeheight)
+EXTERN_CVAR(Bool, gl_aalines)
 
 //==========================================================================
 //
@@ -78,17 +78,20 @@ EXTERN_CVAR(Float, r_actorspriteshadowfadeheight)
 
 CVAR(Bool, gl_usecolorblending, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, gl_sprite_blend, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
-CVAR(Int, gl_spriteclip, 1, CVAR_ARCHIVE)
+CVAR(Int, gl_spriteclip, 2, CVAR_ARCHIVE)
 CVAR(Float, gl_sclipthreshold, 10.0, CVAR_ARCHIVE)
 CVAR(Float, gl_sclipfactor, 1.8f, CVAR_ARCHIVE)
-CVAR(Int, gl_particles_style, 2, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // 0 = square, 1 = round, 2 = smooth
+CVAR(Int, gl_particles_style, 1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // 0 = square, 1 = round, 2 = smooth
 CVAR(Int, gl_billboard_mode, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, gl_billboard_faces_camera, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, gl_billboard_particles, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
-CUSTOM_CVAR(Int, gl_fuzztype, 0, CVAR_ARCHIVE)
+CUSTOM_CVAR(Int, gl_fuzztype, 8, CVAR_ARCHIVE)
 {
 	if (self < 0 || self > 8) self = 0;
 }
+
+// [Nash]
+CVARD(Bool, r_showhitbox, false, CVAR_GLOBALCONFIG | CVAR_CHEAT, "show actor hitboxes");
 
 //==========================================================================
 //
@@ -274,7 +277,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 
 			if (screen->BuffersArePersistent())
 			{
-				CreateVertices(di);
+				CreateVertices(di, state);
 			}
 			if (polyoffset)
 			{
@@ -295,16 +298,10 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		}
 		else
 		{
-			if (actor && di->Level->LightProbes.Size() > 0)
-			{
-				LightProbe* probe = FindLightProbe(di->Level, actor->X(), actor->Y(), actor->Center());
-				if (probe)
-					state.SetDynLight(probe->Red, probe->Green, probe->Blue);
-			}
-
 			FHWModelRenderer renderer(di, state, dynlightindex);
 			RenderModel(&renderer, x, y, z, modelframe, actor, di->Viewpoint.TicFrac);
-			state.SetVertexBuffer(screen->mVertexData);
+			state.SetFlatVertexBuffer();
+			state.SetLightIndex(-1);
 		}
 	}
 
@@ -326,6 +323,63 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 	else if (modelframe == nullptr)
 	{
 		state.ClearDepthBias();
+	}
+
+	// [Nash] hitbox debug
+	if (actor && r_showhitbox)
+	{
+		additivefog = false;
+		state.EnableLineSmooth(true);
+
+		PalEntry hitboxColor = 0x640064;
+
+		if (actor->flags & MF_SOLID)
+			hitboxColor = 0x00ff00;
+		if (actor->flags & MF_SHOOTABLE)
+			hitboxColor = 0xffff00;
+		if (actor->flags3 & MF3_ISMONSTER && actor->health > 0)
+			hitboxColor = 0xff0000;
+		if (actor->flags & MF_SPECIAL && actor->health > 0)
+			hitboxColor = 0x00ffff;
+		if (actor->flags & MF_NOBLOCKMAP)
+			hitboxColor = 0x646464;
+
+		hitboxColor.a = 255;
+		state.SetObjectColor(hitboxColor);
+
+		state.SetAddColor(0);
+		state.SetDynLight(0, 0, 0);
+		state.SetRenderStyle(STYLE_Normal);
+		state.SetTextureMode(TM_NORMAL);
+		di->SetFog(state, 0, 0, false, &Colormap, true);
+		di->SetColor(state, 255, 0, true, Colormap, true);
+		state.EnableTexture(false);
+
+		int scales[12][6] =
+		{
+			// bottom
+			{-1, 0, -1, -1, 0, 1}, {-1, 0, 1, 1, 0, 1}, {1, 0, 1, 1, 0, -1}, {1, 0, -1, -1, 0, -1},
+			// top
+			{-1, 1, -1, -1, 1, 1}, {-1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, -1}, {1, 1, -1, -1, 1, -1},
+			// vertical
+			{-1, 0, -1, -1, 1, -1}, {-1, 0, 1, -1, 1, 1}, {1, 0, 1, 1, 1, 1}, {1, 0, -1, 1, 1, -1}
+			/*
+			// projectilepassheight
+			{-1, 0, -1, 1, 0, 1}, {-1, 0, 1, 1, 0, -1}
+			*/
+		};
+
+		for (int i = 0; i < 12; i++)
+		{
+			auto vert = state.AllocVertices(2);
+			auto vp = vert.first;
+			unsigned int vertexindex = vert.second;
+			vp[0].Set(actor->X() + actor->radius * scales[i][0], actor->Z() + actor->Height * scales[i][1], actor->Y() + actor->radius * scales[i][2], 0.0f, 0.0f);
+			vp[1].Set(actor->X() + actor->radius * scales[i][3], actor->Z() + actor->Height * scales[i][4], actor->Y() + actor->radius * scales[i][5], 0.0f, 0.0f);
+			state.Draw(DT_Lines, vertexindex, 2);
+		}
+
+		state.EnableTexture(true);
 	}
 
 	state.SetObjectColor(0xffffffff);
@@ -491,13 +545,13 @@ bool HWSprite::CalculateVertices(HWDrawInfo *di, FVector3 *v, DVector3 *vp)
 //
 //==========================================================================
 
-inline void HWSprite::PutSprite(HWDrawInfo *di, bool translucent)
+inline void HWSprite::PutSprite(HWDrawInfo *di, FRenderState& state, bool translucent)
 {
 	// That's a lot of checks...
 	if (modelframe && !modelframe->isVoxel && !(modelframe->flags & MDL_NOPERPIXELLIGHTING) && RenderStyle.BlendOp != STYLEOP_Shadow && gl_light_sprites && di->Level->HasDynamicLights && !di->isFullbrightScene() && !fullbright)
 	{
-		hw_GetDynModelLight(actor, lightdata);
-		dynlightindex = screen->mLights->UploadLights(lightdata);
+		hw_GetDynModelLight(di->drawctx, actor, lightdata);
+		dynlightindex = state.UploadLights(lightdata);
 	}
 	else
 		dynlightindex = -1;
@@ -505,7 +559,7 @@ inline void HWSprite::PutSprite(HWDrawInfo *di, bool translucent)
 	vertexindex = -1;
 	if (!screen->BuffersArePersistent())
 	{
-		CreateVertices(di);
+		CreateVertices(di, state);
 	}
 	di->AddSprite(this, translucent);
 }
@@ -516,13 +570,13 @@ inline void HWSprite::PutSprite(HWDrawInfo *di, bool translucent)
 //
 //==========================================================================
 
-void HWSprite::CreateVertices(HWDrawInfo *di)
+void HWSprite::CreateVertices(HWDrawInfo *di, FRenderState& state)
 {
 	if (modelframe == nullptr)
 	{
 		FVector3 v[4];
 		polyoffset = CalculateVertices(di, v, &di->Viewpoint.Pos);
-		auto vert = screen->mVertexData->AllocVertices(4);
+		auto vert = state.AllocVertices(4);
 		auto vp = vert.first;
 		vertexindex = vert.second;
 
@@ -541,7 +595,7 @@ void HWSprite::CreateVertices(HWDrawInfo *di)
 //
 //==========================================================================
 
-void HWSprite::SplitSprite(HWDrawInfo *di, sector_t * frontsector, bool translucent)
+void HWSprite::SplitSprite(HWDrawInfo *di, FRenderState& state, sector_t * frontsector, bool translucent)
 {
 	HWSprite copySprite;
 	double lightbottom;
@@ -578,7 +632,7 @@ void HWSprite::SplitSprite(HWDrawInfo *di, sector_t * frontsector, bool transluc
 			z1=copySprite.z2=lightbottom;
 			vt=copySprite.vb=copySprite.vt+ 
 				(lightbottom-copySprite.z1)*(copySprite.vb-copySprite.vt)/(z2-copySprite.z1);
-			copySprite.PutSprite(di, translucent);
+			copySprite.PutSprite(di, state, translucent);
 			put=true;
 		}
 	}
@@ -690,7 +744,7 @@ void HWSprite::PerformSpriteClipAdjustment(AActor *thing, const DVector2 &thingp
 //
 //==========================================================================
 
-void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t in_area, int thruportal, bool isSpriteShadow)
+void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, sector_t * sector, area_t in_area, int thruportal, bool isSpriteShadow)
 {
 	sector_t rs;
 	sector_t * rendersector;
@@ -707,13 +761,11 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 		return;
 	}
 
-#if 0
 	if (thing->IsKindOf(NAME_Corona))
 	{
 		di->Coronas.Push(static_cast<ACorona*>(thing));
 		return;
 	}
-#endif
 
 	const auto &vp = di->Viewpoint;
 	AActor *camera = vp.camera;
@@ -820,7 +872,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 	{
 		// This cannot create a copy in the fake sector cache because it'd interfere with the main thread, so provide a local buffer for the copy.
 		// Adding synchronization for this one case would cost more than it might save if the result here could be cached.
-		rendersector = hw_FakeFlat(thing->Sector, in_area, false, &rs);
+		rendersector = hw_FakeFlat(di->drawctx, thing->Sector, in_area, false, &rs);
 	}
 	else
 	{
@@ -1220,7 +1272,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 			lightlist = nullptr;
 			if (!drawWithXYBillboard && !modelframe)
 			{
-				SplitSprite(di, thing->Sector, hw_styleflags != STYLEHW_Solid);
+				SplitSprite(di, state, thing->Sector, hw_styleflags != STYLEHW_Solid);
 			}
 		}
 		else
@@ -1233,7 +1285,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 		lightlist = nullptr;
 	}
 
-	PutSprite(di, hw_styleflags != STYLEHW_Solid);
+	PutSprite(di, state, hw_styleflags != STYLEHW_Solid);
 	rendered_sprites++;
 }
 
@@ -1244,7 +1296,7 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 //
 //==========================================================================
 
-void HWSprite::ProcessParticle (HWDrawInfo *di, particle_t *particle, sector_t *sector)//, int shade, int fakeside)
+void HWSprite::ProcessParticle (HWDrawInfo *di, FRenderState& state, particle_t *particle, sector_t *sector)//, int shade, int fakeside)
 {
 	if (particle->alpha==0) return;
 
@@ -1387,7 +1439,7 @@ void HWSprite::ProcessParticle (HWDrawInfo *di, particle_t *particle, sector_t *
 	else
 		lightlist = nullptr;
 
-	PutSprite(di, hw_styleflags != STYLEHW_Solid);
+	PutSprite(di, state, hw_styleflags != STYLEHW_Solid);
 	rendered_sprites++;
 }
 
@@ -1397,7 +1449,7 @@ void HWSprite::ProcessParticle (HWDrawInfo *di, particle_t *particle, sector_t *
 //
 //==========================================================================
 
-void HWDrawInfo::ProcessActorsInPortal(FLinePortalSpan *glport, area_t in_area)
+void HWDrawInfo::ProcessActorsInPortal(FLinePortalSpan *glport, area_t in_area, FRenderState& state)
 {
 	TMap<AActor*, bool> processcheck;
 	if (glport->validcount == validcount) return;	// only process once per frame
@@ -1467,11 +1519,11 @@ void HWDrawInfo::ProcessActorsInPortal(FLinePortalSpan *glport, area_t in_area)
 					// [Nash] draw sprite shadow
 					if (R_ShouldDrawSpriteShadow(th))
 					{
-						spr.Process(this, th, hw_FakeFlat(th->Sector, in_area, false, &fakesector), in_area, 2, true);
+						spr.Process(this, state, th, hw_FakeFlat(drawctx, th->Sector, in_area, false, &fakesector), in_area, 2, true);
 					}
 
 					// This is called from the worker thread and must not alter the fake sector cache.
-					spr.Process(this, th, hw_FakeFlat(th->Sector, in_area, false, &fakesector), in_area, 2);
+					spr.Process(this, state, th, hw_FakeFlat(drawctx, th->Sector, in_area, false, &fakesector), in_area, 2);
 					th->Angles.Yaw = savedangle;
 					th->SetXYZ(savedpos);
 					th->Prev -= newpos - savedpos;

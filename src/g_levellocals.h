@@ -459,13 +459,8 @@ public:
 	int LMTextureCount = 0;
 	int LMTextureSize = 0;
 	TArray<uint16_t> LMTextureData;
-	TArray<LightProbe> LightProbes;
-	int LPMinX = 0;
-	int LPMinY = 0;
-	int LPWidth = 0;
-	int LPHeight = 0;
-	static const int LPCellSize = 32;
-	TArray<LightProbeCell> LPCells;
+	FVector3 SunDirection;
+	FVector3 SunColor;
 
 	// Portal information.
 	FDisplacementTable Displacements;
@@ -612,6 +607,7 @@ public:
 	uint32_t		flags;
 	uint32_t		flags2;
 	uint32_t		flags3;
+	uint32_t		flags9;
 
 	uint32_t		fadeto;					// The color the palette fades to (usually black)
 	uint32_t		outsidefog;				// The fog for sectors with sky ceilings

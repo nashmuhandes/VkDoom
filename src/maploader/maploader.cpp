@@ -83,6 +83,7 @@
 #include "vm.h"
 #include "texturemanager.h"
 #include "hw_vertexbuilder.h"
+#include "scene/hw_meshcache.h"
 #include "version.h"
 
 enum
@@ -3247,7 +3248,8 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 
 	InitRenderInfo();				// create hardware independent renderer resources for the level. This must be done BEFORE the PolyObj Spawn!!!
 	Level->ClearDynamic3DFloorData();	// CreateVBO must be run on the plain 3D floor data.
-	CreateVBO(screen->mVertexData, Level->sectors);
+	CreateVBO(*screen->RenderState(0), Level->sectors);
+	meshcache.Clear();
 
 	screen->InitLightmap(Level->LMTextureSize, Level->LMTextureCount, Level->LMTextureData);
 
@@ -3330,20 +3332,14 @@ void MapLoader::SetSideLightmap(const LightmapSurface &surface)
 void MapLoader::LoadLightmap(MapData *map)
 {
 	// We have to reset everything as FLevelLocals is recycled between maps
-	Level->LightProbes.Reset();
-	Level->LPCells.Reset();
 	Level->LMTexCoords.Reset();
 	Level->LMSurfaces.Reset();
 	Level->LMTextureData.Reset();
 	Level->LMTextureCount = 0;
 	Level->LMTextureSize = 0;
-	Level->LPMinX = 0;
-	Level->LPMinY = 0;
-	Level->LPWidth = 0;
-	Level->LPHeight = 0;
 
-	if (!Args->CheckParm("-enablelightmaps"))
-		return;		// this feature is still too early WIP to allow general access
+	//if (!Args->CheckParm("-enablelightmaps"))
+	//	return;		// this feature is still too early WIP to allow general access
 
 	if (!map->Size(ML_LIGHTMAP))
 		return;
@@ -3353,7 +3349,12 @@ void MapLoader::LoadLightmap(MapData *map)
 		return;
 
 	int version = fr.ReadInt32();
-	if (version != 0)
+	if (version == 0)
+	{
+		Printf(PRINT_HIGH, "LoadLightmap: This is an old unsupported alpha version of the lightmap lump. Please rebuild the map with a newer version of zdray.\n");
+		return;
+	}
+	if (version != 1)
 	{
 		Printf(PRINT_HIGH, "LoadLightmap: unsupported lightmap lump version\n");
 		return;
@@ -3363,78 +3364,21 @@ void MapLoader::LoadLightmap(MapData *map)
 	uint16_t numTextures = fr.ReadUInt16();
 	uint32_t numSurfaces = fr.ReadUInt32();
 	uint32_t numTexCoords = fr.ReadUInt32();
-	uint32_t numLightProbes = fr.ReadUInt32();
 	uint32_t numSubsectors = fr.ReadUInt32();
 	uint32_t numTexBytes = numTextures * textureSize * textureSize * 3 * 2;
-
 	if (numSurfaces == 0 || numTexCoords == 0 || numTexBytes == 0)
 		return;
 
-	Printf(PRINT_HIGH, "WARNING! Lightmaps are an experimental feature and are subject to change before being finalized. Do not expect this to work as-is in future releases of %s!\n", GAMENAME);
+	float sunDir[3], sunColor[3];
+	fr.Read(sunDir, sizeof(float) * 3);
+	fr.Read(sunColor, sizeof(float) * 3);
+	Level->SunDirection = FVector3(sunDir);
+	Level->SunColor = FVector3(sunColor);
 
 	/*if (numSubsectors != Level->subsectors.Size())
 	{
 		Printf(PRINT_HIGH, "LoadLightmap: subsector count for level doesn't match (%d in wad vs %d in engine)\n", (int)numSubsectors, (int)Level->subsectors.Size());
 	}*/
-
-	if (numLightProbes > 0)
-	{
-		Level->LightProbes.Resize(numLightProbes);
-		fr.Read(&Level->LightProbes[0], sizeof(LightProbe) * numLightProbes);
-
-		// Sort the light probes so that they are ordered by cell.
-		// This lets us point at the first probe knowing all other probes in the cell will follow.
-		// Also improves locality.
-
-		double rcpCellSize = 1.0 / Level->LPCellSize;
-		auto cellCompareLess = [=](const LightProbe& a, const LightProbe& b)
-		{
-			double cellY_A = std::floor(a.Y * rcpCellSize);
-			double cellY_B = std::floor(b.Y * rcpCellSize);
-			if (cellY_A != cellY_B)
-				return cellY_A < cellY_B;
-			double cellX_A = std::floor(a.X * rcpCellSize);
-			double cellX_B = std::floor(b.X * rcpCellSize);
-			return cellX_A < cellX_B;
-		};
-		std::sort(Level->LightProbes.begin(), Level->LightProbes.end(), cellCompareLess);
-
-		// Find probe bounds and the grid that covers it
-		float probesMinX = Level->LightProbes[0].X;
-		float probesMaxX = Level->LightProbes[0].X;
-		float probesMinY = Level->LightProbes[0].Y;
-		float probesMaxY = Level->LightProbes[0].Y;
-		for (const LightProbe& p : Level->LightProbes)
-		{
-			probesMinX = std::min(probesMinX, p.X);
-			probesMaxX = std::max(probesMaxX, p.X);
-			probesMinY = std::min(probesMinY, p.Y);
-			probesMaxY = std::max(probesMaxY, p.Y);
-		}
-		Level->LPMinX = (int)std::floor(probesMinX * rcpCellSize);
-		Level->LPMinY = (int)std::floor(probesMinY * rcpCellSize);
-		Level->LPWidth = (int)std::floor(probesMaxX * rcpCellSize) + 1 - Level->LPMinX;
-		Level->LPHeight = (int)std::floor(probesMaxY * rcpCellSize) + 1 - Level->LPMinY;
-
-		// Place probes in a grid for faster search
-		Level->LPCells.Resize(Level->LPWidth * Level->LPHeight);
-		int minX = Level->LPMinX;
-		int minY = Level->LPMinY;
-		int width = Level->LPWidth;
-		int height = Level->LPHeight;
-		for (LightProbe& p : Level->LightProbes)
-		{
-			int gridX = (int)std::floor(p.X * rcpCellSize) - minX;
-			int gridY = (int)std::floor(p.Y * rcpCellSize) - minY;
-			if (gridX >= 0 && gridY >= 0 && gridX < width && gridY < height)
-			{
-				LightProbeCell& cell = Level->LPCells[gridX + (size_t)gridY * width];
-				if (!cell.FirstProbe)
-					cell.FirstProbe = &p;
-				cell.NumProbes++;
-			}
-		}
-	}
 
 	Level->LMTexCoords.Resize(numTexCoords * 2);
 

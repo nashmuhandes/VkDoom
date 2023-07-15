@@ -6,10 +6,13 @@
 #include "texmanip.h"
 #include "version.h"
 #include "i_interface.h"
+#include "hw_viewpointuniforms.h"
+#include "hw_cvars.h"
 
 struct FColormap;
-class IVertexBuffer;
-class IIndexBuffer;
+class IBuffer;
+struct HWViewpointUniforms;
+struct FDynLightData;
 
 enum EClearTarget
 {
@@ -119,6 +122,8 @@ struct FDepthBiasState
 	}
 };
 
+struct FFlatVertex;
+
 enum EPassType
 {
 	NORMAL_PASS,
@@ -181,11 +186,11 @@ struct StreamData
 	FVector4PalEntry uTextureModulateColor;
 	FVector4PalEntry uTextureBlendColor;
 	FVector4PalEntry uFogColor;
-	float uDesaturationFactor;
+	float uDesaturationFactor; // HWDrawInfo::SetColor
 	float uInterpolationFactor;
 	float timer;
 	int useVertexData;
-	FVector4 uVertexColor;
+	FVector4 uVertexColor; // HWDrawInfo::SetColor
 	FVector4 uVertexNormal;
 
 	FVector4 uGlowTopPlane;
@@ -201,7 +206,19 @@ struct StreamData
 
 	FVector4 uDetailParms;
 	FVector4 uNpotEmulation;
-	FVector4 padding1, padding2, padding3;
+
+	FVector2 uClipSplit;
+	FVector2 uSpecularMaterial;
+
+	float uLightLevel; // HWDrawInfo::SetColor
+	float uFogDensity;
+	float uLightFactor;
+	float uLightDist;
+
+	float uAlphaThreshold;
+	float padding1;
+	float padding2;
+	float padding3;
 };
 
 class FRenderState
@@ -211,8 +228,6 @@ protected:
 	uint8_t mTextureEnabled:1;
 	uint8_t mGlowEnabled : 1;
 	uint8_t mGradientEnabled : 1;
-	uint8_t mModelMatrixEnabled : 1;
-	uint8_t mTextureMatrixEnabled : 1;
 	uint8_t mSplitEnabled : 1;
 	uint8_t mBrightmapEnabled : 1;
 
@@ -223,11 +238,7 @@ protected:
 	int mTextureClamp;
 	int mTextureModeFlags;
 	int mSoftLight;
-	float mLightParms[4];
-
-	float mAlphaThreshold;
-	float mClipSplit[2];
-
+	int mLightMode = -1;
 
 	int mColorMapSpecial;
 	float mColorMapFlash;
@@ -240,19 +251,15 @@ protected:
 	FMaterialState mMaterial;
 	FDepthBiasState mBias;
 
-	IVertexBuffer *mVertexBuffer;
+	IBuffer* mVertexBuffer;
 	int mVertexOffsets[2];	// one per binding point
-	IIndexBuffer *mIndexBuffer;
+	IBuffer* mIndexBuffer;
 
 	EPassType mPassType = NORMAL_PASS;
 
 public:
 
 	uint64_t firstFrame = 0;
-	VSMatrix mModelMatrix;
-	VSMatrix mTextureMatrix;
-
-public:
 
 	void Reset()
 	{
@@ -264,9 +271,7 @@ public:
 		mTextureClamp = 0;
 		mTextureModeFlags = 0;
 		mStreamData.uDesaturationFactor = 0.0f;
-		mAlphaThreshold = 0.5f;
-		mModelMatrixEnabled = false;
-		mTextureMatrixEnabled = false;
+		mStreamData.uAlphaThreshold = 0.5f;
 		mSplitEnabled = false;
 		mStreamData.uAddColor = 0;
 		mStreamData.uObjectColor = 0xffffffff;
@@ -275,8 +280,10 @@ public:
 		mStreamData.uTextureAddColor = 0;
 		mStreamData.uTextureModulateColor = 0;
 		mSoftLight = 0;
-		mLightParms[0] = mLightParms[1] = mLightParms[2] = 0.0f;
-		mLightParms[3] = -1.f;
+		mStreamData.uLightDist = 0.0f;
+		mStreamData.uLightFactor = 0.0f;
+		mStreamData.uFogDensity = 0.0f;
+		mStreamData.uLightLevel = -1.0f;
 		mSpecialEffect = EFF_NONE;
 		mLightIndex = -1;
 		mBoneIndexBase = -1;
@@ -307,8 +314,6 @@ public:
 #ifdef NPOT_EMULATION
 		mStreamData.uNpotEmulation = { 0,0,0,0 };
 #endif
-		mModelMatrix.loadIdentity();
-		mTextureMatrix.loadIdentity();
 		ClearClipSplit();
 	}
 
@@ -433,16 +438,6 @@ public:
 		mSplitEnabled = on;
 	}
 
-	void EnableModelMatrix(bool on)
-	{
-		mModelMatrixEnabled = on;
-	}
-
-	void EnableTextureMatrix(bool on)
-	{
-		mTextureMatrixEnabled = on;
-	}
-
 	void SetGlowParams(float *t, float *b)
 	{
 		mStreamData.uGlowTopColor = { t[0], t[1], t[2], t[3] };
@@ -451,13 +446,18 @@ public:
 
 	void SetSoftLightLevel(int llevel, int blendfactor = 0)
 	{
-		if (blendfactor == 0) mLightParms[3] = llevel / 255.f;
-		else mLightParms[3] = -1.f;
+		if (blendfactor == 0) mStreamData.uLightLevel = llevel / 255.f;
+		else mStreamData.uLightLevel = -1.f;
 	}
 
 	void SetNoSoftLightLevel()
 	{
-		 mLightParms[3] = -1.f;
+		mStreamData.uLightLevel = -1.f;
+	}
+
+	void SetLightMode(int lightmode)
+	{
+		mLightMode = lightmode;
 	}
 
 	void SetGlowPlanes(const FVector4 &tp, const FVector4& bp)
@@ -545,13 +545,13 @@ public:
 		const float LOG2E = 1.442692f;	// = 1/log(2)
 		mFogColor = c;
 		mStreamData.uFogColor = mFogColor;
-		if (d >= 0.0f) mLightParms[2] = d * (-LOG2E / 64000.f);
+		if (d >= 0.0f) mStreamData.uFogDensity = d * (-LOG2E / 64000.f);
 	}
 
 	void SetLightParms(float f, float d)
 	{
-		mLightParms[1] = f;
-		mLightParms[0] = d;
+		mStreamData.uLightFactor = f;
+		mStreamData.uLightDist = d;
 	}
 
 	PalEntry GetFogColor() const
@@ -561,8 +561,8 @@ public:
 
 	void AlphaFunc(int func, float thresh)
 	{
-		if (func == Alpha_Greater) mAlphaThreshold = thresh;
-		else mAlphaThreshold = thresh - 0.001f;
+		if (func == Alpha_Greater) mStreamData.uAlphaThreshold = thresh;
+		else mStreamData.uAlphaThreshold = thresh - 0.001f;
 	}
 
 	void SetLightIndex(int index)
@@ -637,44 +637,44 @@ public:
 
 	void SetClipSplit(float bottom, float top)
 	{
-		mClipSplit[0] = bottom;
-		mClipSplit[1] = top;
+		mStreamData.uClipSplit.X = bottom;
+		mStreamData.uClipSplit.Y = top;
 	}
 
 	void SetClipSplit(float *vals)
 	{
-		memcpy(mClipSplit, vals, 2 * sizeof(float));
+		mStreamData.uClipSplit.X = vals[0];
+		mStreamData.uClipSplit.Y = vals[1];
 	}
 
 	void GetClipSplit(float *out)
 	{
-		memcpy(out, mClipSplit, 2 * sizeof(float));
+		out[0] = mStreamData.uClipSplit.X;
+		out[1] = mStreamData.uClipSplit.Y;
 	}
 
 	void ClearClipSplit()
 	{
-		mClipSplit[0] = -1000000.f;
-		mClipSplit[1] = 1000000.f;
+		mStreamData.uClipSplit.X = -1000000.f;
+		mStreamData.uClipSplit.Y = 1000000.f;
 	}
 
-	void SetVertexBuffer(IVertexBuffer *vb, int offset0, int offset1)
+	void SetVertexBuffer(IBuffer* vb, int offset0 = 0, int offset1 = 0)
 	{
-		assert(vb);
 		mVertexBuffer = vb;
 		mVertexOffsets[0] = offset0;
 		mVertexOffsets[1] = offset1;
 	}
 
-	void SetIndexBuffer(IIndexBuffer *ib)
+	void SetIndexBuffer(IBuffer* ib)
 	{
 		mIndexBuffer = ib;
 	}
 
-	template <class T> void SetVertexBuffer(T *buffer)
+	void SetFlatVertexBuffer()
 	{
-		auto ptrs = buffer->GetBufferObjects(); 
-		SetVertexBuffer(ptrs.first, 0, 0);
-		SetIndexBuffer(ptrs.second);
+		SetVertexBuffer(nullptr);
+		SetIndexBuffer(nullptr);
 	}
 
 	void SetInterpolationFactor(float fac)
@@ -713,7 +713,40 @@ public:
 		mColorMapFlash = flash;
 	}
 
+	int Set2DViewpoint(int width, int height, int palLightLevels = 0)
+	{
+		HWViewpointUniforms matrices;
+		matrices.mViewMatrix.loadIdentity();
+		matrices.mNormalViewMatrix.loadIdentity();
+		matrices.mViewHeight = 0;
+		matrices.mGlobVis = 1.f;
+		matrices.mPalLightLevels = palLightLevels;
+		matrices.mClipLine.X = -10000000.0f;
+		matrices.mShadowmapFilter = gl_shadowmap_filter;
+		matrices.mLightBlendMode = 0;
+		matrices.mProjectionMatrix.ortho(0, (float)width, (float)height, 0, -1.0f, 1.0f);
+		matrices.CalcDependencies();
+		return SetViewpoint(matrices);
+	}
+
 	// API-dependent render interface
+
+	// Worker threads
+	virtual void FlushCommands() { }
+
+	// Vertices
+	virtual std::pair<FFlatVertex*, unsigned int> AllocVertices(unsigned int count) = 0;
+	virtual void SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes) = 0;
+	virtual void UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count) = 0;
+	virtual void ResetVertices() = 0;
+
+	// Buffers
+	virtual int SetViewpoint(const HWViewpointUniforms& vp) = 0;
+	virtual void SetViewpoint(int index) = 0;
+	virtual void SetModelMatrix(const VSMatrix& matrix, const VSMatrix& normalMatrix) = 0;
+	virtual void SetTextureMatrix(const VSMatrix& matrix) = 0;
+	virtual int UploadLights(const FDynLightData& lightdata) = 0;
+	virtual int UploadBones(const TArray<VSMatrix>& bones) = 0;
 
 	// Draw commands
 	virtual void ClearScreen() = 0;
@@ -728,13 +761,11 @@ public:
 	virtual void SetColorMask(bool r, bool g, bool b, bool a) = 0;	// Used by portals.
 	virtual void SetStencil(int offs, int op, int flags=-1) = 0;	// Used by portal setup and render hacks.
 	virtual void SetCulling(int mode) = 0;						// Used by model drawer only.
-	virtual void EnableClipDistance(int num, bool state) = 0;	// Use by sprite sorter for vertical splits.
 	virtual void Clear(int targets) = 0;						// not used during normal rendering
 	virtual void EnableStencil(bool on) = 0;					// always on for 3D, always off for 2D
 	virtual void SetScissor(int x, int y, int w, int h) = 0;	// constant for 3D, changes for 2D
 	virtual void SetViewport(int x, int y, int w, int h) = 0;	// constant for all 3D and all 2D
 	virtual void EnableDepthTest(bool on) = 0;					// used by 2D, portals and render hacks.
-	virtual void EnableMultisampling(bool on) = 0;				// only active for 2D
 	virtual void EnableLineSmooth(bool on) = 0;					// constant setting for each 2D drawer operation
 	virtual void EnableDrawBuffers(int count, bool apply = false) = 0;	// Used by SSAO and EnableDrawBufferAttachments
 
@@ -743,5 +774,6 @@ public:
 		SetColorMask(on, on, on, on);
 	}
 
+	friend class Mesh;
 };
 

@@ -49,17 +49,11 @@
 
 struct FPortalSceneState;
 class FSkyVertexBuffer;
-class IIndexBuffer;
-class IVertexBuffer;
-class IDataBuffer;
-class FFlatVertexBuffer;
-class HWViewpointBuffer;
-class FLightBuffer;
+class IBuffer;
 struct HWDrawInfo;
 class FMaterial;
 class FGameTexture;
 class FRenderState;
-class BoneBuffer;
 
 enum EHWCaps
 {
@@ -94,6 +88,7 @@ class FileWriter;
 enum FTextureFormat : uint32_t;
 class FModelRenderer;
 struct SamplerUniform;
+struct FVertexBufferAttribute;
 
 //
 // VIDEO
@@ -141,11 +136,7 @@ public:
 	unsigned int maxuniformblock = 65536;
 	const char *vendorstring;					// We have to account for some issues with particular vendors.
 	FSkyVertexBuffer *mSkyData = nullptr;		// the sky vertex buffer
-	FFlatVertexBuffer *mVertexData = nullptr;	// Global vertex data
-	HWViewpointBuffer *mViewpoints = nullptr;	// Viewpoint render data.
-	FLightBuffer *mLights = nullptr;			// Dynamic lights
-	BoneBuffer* mBones = nullptr;				// Model bones
-	IShadowMap mShadowMap;
+	ShadowMap* mShadowMap = nullptr;
 
 	int mGameScreenWidth = 0;
 	int mGameScreenHeight = 0;
@@ -163,12 +154,7 @@ public:
 	virtual void InitializeState() = 0;	// For stuff that needs 'screen' set.
 	virtual bool IsVulkan() { return false; }
 	virtual bool IsPoly() { return false; }
-	virtual int GetShaderCount();
 	virtual bool CompileNextShader() { return true; }
-	void SetAABBTree(hwrenderer::LevelAABBTree * tree)
-	{
-		mShadowMap.SetAABBTree(tree);
-	}
 	virtual void SetLevelMesh(hwrenderer::LevelMesh *mesh) { }
 	bool allowSSBO() const
 	{
@@ -228,7 +214,7 @@ public:
 	virtual void BeginFrame() {}
 	virtual void SetWindowSize(int w, int h) {}
 	virtual void StartPrecaching() {}
-	virtual FRenderState* RenderState() { return nullptr; }
+	virtual FRenderState* RenderState(int threadIndex) { return nullptr; }
 
 	virtual int GetClientWidth() = 0;
 	virtual int GetClientHeight() = 0;
@@ -237,9 +223,8 @@ public:
 	virtual void InitLightmap(int LMTextureSize, int LMTextureCount, TArray<uint16_t>& LMTextureData) {}
 
     // Interface to hardware rendering resources
-	virtual IVertexBuffer *CreateVertexBuffer() { return nullptr; }
-	virtual IIndexBuffer *CreateIndexBuffer() { return nullptr; }
-	virtual IDataBuffer *CreateDataBuffer(int bindingpoint, bool ssbo, bool needsresize) { return nullptr; }
+	virtual IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs) { return nullptr; }
+	virtual IBuffer* CreateIndexBuffer() { return nullptr; }
 	bool BuffersArePersistent() { return !!(hwcaps & RFL_BUFFER_STORAGE); }
 
 	// This is overridable in case Vulkan does it differently.
@@ -256,7 +241,7 @@ public:
 	virtual void FirstEye() {}
 	virtual void NextEye(int eyecount) {}
 	virtual void SetSceneRenderTarget(bool useSSAO) {}
-	virtual void UpdateShadowMap() {}
+	virtual void SetShadowMaps(const TArray<float>& lights, hwrenderer::LevelAABBTree* tree, bool newTree) {}
 	virtual void WaitForCommands(bool finish) {}
 	virtual void SetSaveBuffers(bool yes) {}
 	virtual void ImageTransitionScene(bool unknown) {}
@@ -289,8 +274,10 @@ public:
 	static float GetZNear() { return 5.f; }
 	static float GetZFar() { return 65536.f; }
 
-	// The original size of the framebuffer as selected in the video menu.
 	uint64_t FrameTime = 0;
+	uint64_t FrameTimeNS = 0;
+
+	int MaxThreads = 8; // To do: this may need to be limited by how much memory is available for dedicated buffer mapping (i.e. is resizeable bar available or not)
 
 private:
 	uint64_t fpsLimitTime = 0;
@@ -316,7 +303,6 @@ void V_InitScreen();
 void V_Init2 ();
 
 void V_Shutdown ();
-int V_GetBackend();
 
 inline bool IsRatioWidescreen(int ratio) { return (ratio & 3) != 0; }
 extern bool setsizeneeded, setmodeneeded;

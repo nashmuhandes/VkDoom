@@ -29,6 +29,9 @@
 
 #include "stats.h"
 
+CVAR(Int, gl_dither_bpc, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
+CVAR(Int, gl_multisample, 4, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+
 Postprocess hw_postprocess;
 
 PPResource *PPResource::First = nullptr;
@@ -879,7 +882,7 @@ void PPShadowMap::Update(PPRenderState* renderstate)
 {
 	ShadowMapUniforms uniforms;
 	uniforms.ShadowmapQuality = (float)gl_shadowmap_quality;
-	uniforms.NodesCount = screen->mShadowMap.NodesCount();
+	uniforms.NodesCount = screen->mShadowMap->NodesCount();
 
 	renderstate->PushGroup("shadowmap");
 
