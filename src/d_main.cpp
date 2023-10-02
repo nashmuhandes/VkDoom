@@ -399,9 +399,9 @@ void D_Render(std::function<void()> action, bool interpolate)
 	for (auto Level : AllLevels())
 	{
 		// Check for the presence of dynamic lights at the start of the frame once.
-		if ((gl_lights && vid_rendermode == 4) || (r_dynlights && vid_rendermode != 4) || Level->LMTextureCount > 0)
+		if ((gl_lights && vid_rendermode == 4) || (r_dynlights && vid_rendermode != 4) || Level->lightmaps)
 		{
-			Level->HasDynamicLights = Level->lights || Level->LMTextureCount > 0;
+			Level->HasDynamicLights = Level->lights || Level->lightmaps;
 		}
 		else Level->HasDynamicLights = false;	// lights are off so effectively we have none.
 		if (interpolate) Level->interpolator.DoInterpolations(I_GetTimeFrac());
@@ -997,6 +997,7 @@ void D_Display ()
 	screen->FrameTimeNS = I_nsTime();
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
+	if (level.levelMesh) level.levelMesh->BeginFrame(level);
 	screen->BeginFrame();
 	twod->ClearClipRect();
 	if ((gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL) && gametic != 0)
@@ -3072,7 +3073,7 @@ static int FileSystemPrintf(FSMessageLevel level, const char* fmt, ...)
 		DPrintf(DMSG_NOTIFY, "%s", text.GetChars());
 		break;
 	}
-	return text.Len();
+	return (int)text.Len();
 }
 //==========================================================================
 //

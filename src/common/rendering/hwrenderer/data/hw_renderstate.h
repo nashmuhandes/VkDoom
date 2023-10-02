@@ -3,11 +3,14 @@
 #include "vectors.h"
 #include "matrix.h"
 #include "hw_material.h"
+#include "hw_levelmesh.h"
 #include "texmanip.h"
 #include "version.h"
 #include "i_interface.h"
 #include "hw_viewpointuniforms.h"
 #include "hw_cvars.h"
+
+#include <atomic>
 
 struct FColormap;
 class IBuffer;

@@ -10,6 +10,9 @@
 #include "hw_weapon.h"
 #include "hw_drawlist.h"
 
+EXTERN_CVAR(Bool, lm_always_update);
+EXTERN_CVAR(Int, lm_max_updates);
+
 enum EDrawMode
 {
 	DM_MAINVIEW,
@@ -148,6 +151,7 @@ struct HWDrawInfo
 	TArray<HWDecal *> Decals[2];	// the second slot is for mirrors which get rendered in a separate pass.
 	TArray<HUDSprite> hudsprites;	// These may just be stored by value.
 	TArray<ACorona*> Coronas;
+	TArray<LevelMeshSurface*> VisibleSurfaces;
 	uint64_t LastFrameTime = 0;
 
 	TArray<MissingTextureInfo> MissingUpperTextures;
@@ -196,6 +200,29 @@ struct HWDrawInfo
 	{
 		VPUniforms.mClipLine = { (float)line->v1->fX(), (float)line->v1->fY(), (float)line->Delta().X, (float)line->Delta().Y };
 		VPUniforms.mClipHeight = 0;
+	}
+
+	void PushVisibleSurface(LevelMeshSurface* surface)
+	{
+		if (outer)
+		{
+			outer->PushVisibleSurface(surface);
+			return;
+		}
+
+		if (lm_always_update)
+		{
+			surface->needsUpdate = true;
+		}
+		else if (VisibleSurfaces.Size() >= unsigned(lm_max_updates))
+		{
+			return;
+		}
+
+		if (surface->needsUpdate && !surface->portalIndex && !surface->bSky)
+		{
+			VisibleSurfaces.Push(surface);
+		}
 	}
 
 	HWPortal * FindPortal(const void * src);
@@ -335,6 +362,8 @@ private:
 	void AddPolyobjs(subsector_t* sub, FRenderState& state);
 	void AddLines(subsector_t* sub, sector_t* sector, FRenderState& state);
 	void AddSpecialPortalLines(subsector_t* sub, sector_t* sector, linebase_t* line, FRenderState& state);
+
+	void UpdateLightmaps();
 };
 
 void CleanSWDrawer();

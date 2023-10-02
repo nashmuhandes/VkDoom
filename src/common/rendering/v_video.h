@@ -155,7 +155,8 @@ public:
 	virtual bool IsVulkan() { return false; }
 	virtual bool IsPoly() { return false; }
 	virtual bool CompileNextShader() { return true; }
-	virtual void SetLevelMesh(hwrenderer::LevelMesh *mesh) { }
+	virtual void SetLevelMesh(LevelMesh *mesh) { }
+	virtual void UpdateLightmaps(const TArray<LevelMeshSurface*>& surfaces) {}
 	bool allowSSBO() const
 	{
 #ifndef HW_BLOCK_SSBO
@@ -220,8 +221,6 @@ public:
 	virtual int GetClientHeight() = 0;
 	virtual void BlurScene(float amount) {}
 
-	virtual void InitLightmap(int LMTextureSize, int LMTextureCount, TArray<uint16_t>& LMTextureData) {}
-
     // Interface to hardware rendering resources
 	virtual IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs) { return nullptr; }
 	virtual IBuffer* CreateIndexBuffer() { return nullptr; }
@@ -249,6 +248,9 @@ public:
 	virtual bool FlipSavePic() const { return false; }
 	virtual void RenderTextureView(FCanvasTexture* tex, std::function<void(IntRect&)> renderFunc) {}
 	virtual void SetActiveRenderTarget() {}
+
+	// Get the array index for the material in the textures array accessible from shaders
+	virtual int GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation) { return -1; }
 
 	// Screen wiping
 	virtual FTexture *WipeStartScreen();

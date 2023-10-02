@@ -1016,10 +1016,10 @@ bool HWWall::SetWallCoordinates(seg_t * seg, FTexCoordInfo *tci, float textureto
 	}
 
 	texcoord* srclightuv;
-	if (lightmap && lightmap->Type != ST_NULL)
+	if (lightmap && lightmap->Type != ST_UNKNOWN)
 	{
 		srclightuv = (texcoord*)lightmap->TexCoords;
-		lindex = (float)lightmap->LightmapNum;
+		lindex = (float)lightmap->AtlasTile.ArrayIndex;
 	}
 	else
 	{
@@ -1219,7 +1219,7 @@ void HWWall::CheckTexturePosition(FTexCoordInfo *tci)
 }
 
 
-static void GetTexCoordInfo(FGameTexture *tex, FTexCoordInfo *tci, side_t *side, int texpos)
+void GetTexCoordInfo(FGameTexture *tex, FTexCoordInfo *tci, side_t *side, int texpos)
 {
 	tci->GetFromTexture(tex, (float)side->GetTextureXScale(texpos), (float)side->GetTextureYScale(texpos), !!(side->GetLevel()->flags3 & LEVEL3_FORCEWORLDPANNING));
 }
@@ -1264,7 +1264,11 @@ void HWWall::DoTexture(HWDrawInfo *di, FRenderState& state, int _type,seg_t * se
 
 	if (seg->sidedef->lightmap && type >= RENDERWALL_TOP && type <= RENDERWALL_BOTTOM)
 	{
-		lightmap = &seg->sidedef->lightmap[type - RENDERWALL_TOP];
+		lightmap = seg->sidedef->lightmap[type - RENDERWALL_TOP];
+		if (lightmap)
+		{
+			di->PushVisibleSurface(lightmap);
+		}
 	}
 	else
 	{
@@ -1325,6 +1329,15 @@ void HWWall::DoMidTexture(HWDrawInfo *di, FRenderState& state, seg_t * seg, bool
 	//
 	if (texture)
 	{
+		if (auto lightmapPtr = seg->sidedef->lightmap)
+		{
+			lightmap = lightmapPtr[side_t::mid];
+			if (lightmap)
+			{
+				di->PushVisibleSurface(lightmap);
+			}
+		}
+
 		// Align the texture to the ORIGINAL sector's height!!
 		// At this point slopes don't matter because they don't affect the texture's z-position
 
@@ -1654,12 +1667,14 @@ void HWWall::BuildFFBlock(HWDrawInfo *di, FRenderState& state, seg_t * seg, F3DF
 
 	lightmap = nullptr;
 	if (seg->sidedef == seg->linedef->sidedef[0])
-		lightmap = seg->linedef->sidedef[1]->lightmap;
+		lightmap = seg->linedef->sidedef[1]->lightmap ? seg->linedef->sidedef[1]->lightmap[4 + roverIndex] : nullptr;
 	else
-		lightmap = seg->linedef->sidedef[0]->lightmap;
+		lightmap = seg->linedef->sidedef[0]->lightmap ? seg->linedef->sidedef[0]->lightmap[4 + roverIndex] : nullptr;
 
 	if (lightmap)
-		lightmap += 4 + roverIndex;
+	{
+		di->PushVisibleSurface(lightmap);
+	}
 
 	if (rover->flags&FF_FOG)
 	{
@@ -1721,10 +1736,10 @@ void HWWall::BuildFFBlock(HWDrawInfo *di, FRenderState& state, seg_t * seg, F3DF
 		CheckTexturePosition(&tci);
 
 		texcoord* srclightuv;
-		if (lightmap && lightmap->Type != ST_NULL)
+		if (lightmap && lightmap->Type != ST_UNKNOWN)
 		{
 			srclightuv = (texcoord*)lightmap->TexCoords;
-			lindex = (float)lightmap->LightmapNum;
+			lindex = (float)lightmap->AtlasTile.ArrayIndex;
 		}
 		else
 		{

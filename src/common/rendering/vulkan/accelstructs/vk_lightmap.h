@@ -8,6 +8,7 @@ typedef dp::rect_pack::RectPacker<int> RectPacker;
 
 class VulkanRenderDevice;
 class FString;
+class ShaderIncludeResult;
 
 struct Uniforms
 {
@@ -17,21 +18,33 @@ struct Uniforms
 	float SunIntensity;
 };
 
-struct PushConstants
+struct LightmapRaytracePC
 {
 	uint32_t LightStart;
 	uint32_t LightEnd;
 	int32_t SurfaceIndex;
 	int32_t PushPadding1;
-	FVector3 LightmapOrigin;
+	FVector3 WorldToLocal;
+	float TextureSize;
+	FVector3 ProjLocalToU;
 	float PushPadding2;
-	FVector3 LightmapStepX;
+	FVector3 ProjLocalToV;
 	float PushPadding3;
-	FVector3 LightmapStepY;
-	float PushPadding4;
+	float TileX;
+	float TileY;
+	float TileWidth;
+	float TileHeight;
 };
 
-struct LightmapImage
+struct LightmapCopyPC
+{
+	int SrcTexSize;
+	int DestTexSize;
+	int Padding1;
+	int Padding2;
+};
+
+struct LightmapBakeImage
 {
 	struct
 	{
@@ -45,14 +58,25 @@ struct LightmapImage
 		std::unique_ptr<VulkanImage> Image;
 		std::unique_ptr<VulkanImageView> View;
 		std::unique_ptr<VulkanFramebuffer> Framebuffer;
+		std::unique_ptr<VulkanDescriptorSet> DescriptorSet;
 	} resolve;
 
-	std::unique_ptr<VulkanBuffer> Transfer;
-};
+	struct
+	{
+		std::unique_ptr<VulkanImage> Image;
+		std::unique_ptr<VulkanImageView> View;
+		std::unique_ptr<VulkanFramebuffer> Framebuffer;
+		std::unique_ptr<VulkanDescriptorSet> DescriptorSet[2];
+	} blur;
 
-struct SceneVertex
-{
-	FVector2 Position;
+	struct
+	{
+		std::unique_ptr<VulkanDescriptorSet> DescriptorSet;
+	} copy;
+
+	// how much of the image is used for the baking
+	uint16_t maxX = 0;
+	uint16_t maxY = 0;
 };
 
 struct LightInfo
@@ -71,7 +95,29 @@ struct LightInfo
 	float Padding3;
 };
 
+struct SelectedSurface
+{
+	LevelMeshSurface* Surface = nullptr;
+	int X = -1;
+	int Y = -1;
+	bool Rendered = false;
+};
+
 static_assert(sizeof(LightInfo) == sizeof(float) * 20);
+
+struct CopyTileInfo
+{
+	int SrcPosX;
+	int SrcPosY;
+	int DestPosX;
+	int DestPosY;
+	int TileWidth;
+	int TileHeight;
+	int Padding1;
+	int Padding2;
+};
+
+static_assert(sizeof(CopyTileInfo) == sizeof(int32_t) * 8);
 
 class VkLightmap
 {
@@ -79,37 +125,43 @@ public:
 	VkLightmap(VulkanRenderDevice* fb);
 	~VkLightmap();
 
-	void Raytrace(hwrenderer::LevelMesh* level);
+	void BeginFrame();
+	void Raytrace(const TArray<LevelMeshSurface*>& surfaces);
+	void SetLevelMesh(LevelMesh* level);
 
 private:
-	void UpdateAccelStructDescriptors();
-
-	void BeginCommands();
-	void FinishCommands();
-
+	void SelectSurfaces(const TArray<LevelMeshSurface*>& surfaces);
 	void UploadUniforms();
-	void CreateAtlasImages();
-	void RenderAtlasImage(size_t pageIndex);
-	void ResolveAtlasImage(size_t pageIndex);
-	void DownloadAtlasImage(size_t pageIndex);
+	void Render();
+	void Resolve();
+	void Blur();
+	void CopyResult();
 
-	LightmapImage CreateImage(int width, int height);
+	void UpdateAccelStructDescriptors();
 
 	void CreateShaders();
 	void CreateRaytracePipeline();
 	void CreateResolvePipeline();
+	void CreateBlurPipeline();
+	void CreateCopyPipeline();
 	void CreateUniformBuffer();
-	void CreateSceneVertexBuffer();
-	void CreateSceneLightBuffer();
-
-	static FVector2 ToUV(const FVector3& vert, const hwrenderer::Surface* targetSurface);
+	void CreateLightBuffer();
+	void CreateTileBuffer();
+	void CreateDrawIndexedBuffer();
+	void CreateBakeImage();
 
 	static FString LoadPrivateShaderLump(const char* lumpname);
+	static FString LoadPublicShaderLump(const char* lumpname);
+	static ShaderIncludeResult OnInclude(FString headerName, FString includerName, size_t depth, bool system);
 
 	VulkanRenderDevice* fb = nullptr;
-	hwrenderer::LevelMesh* mesh = nullptr;
+	LevelMesh* mesh = nullptr;
 
 	bool useRayQuery = true;
+
+	TArray<SelectedSurface> selectedSurfaces;
+	TArray<TArray<SelectedSurface*>> copylists;
+	TArray<LevelMeshLight> templightlist;
 
 	struct
 	{
@@ -124,25 +176,39 @@ private:
 
 	struct
 	{
-		static const int BufferSize = 1 * 1024 * 1024;
-		std::unique_ptr<VulkanBuffer> Buffer;
-		SceneVertex* Vertices = nullptr;
-		int Pos = 0;
-	} vertices;
-
-	struct
-	{
-		static const int BufferSize = 2 * 1024 * 1024;
+		const int BufferSize = 2 * 1024 * 1024;
 		std::unique_ptr<VulkanBuffer> Buffer;
 		LightInfo* Lights = nullptr;
 		int Pos = 0;
+		int ResetCounter = 0;
 	} lights;
 
 	struct
 	{
-		std::unique_ptr<VulkanShader> vert;
+		const int BufferSize = 100'000;
+		std::unique_ptr<VulkanBuffer> Buffer;
+		CopyTileInfo* Tiles = nullptr;
+	} copytiles;
+
+	struct
+	{
+		const int BufferSize = 100'000;
+		std::unique_ptr<VulkanBuffer> CommandsBuffer;
+		std::unique_ptr<VulkanBuffer> ConstantsBuffer;
+		VkDrawIndexedIndirectCommand* Commands = nullptr;
+		LightmapRaytracePC* Constants = nullptr;
+		int Pos = 0;
+	} drawindexed;
+
+	struct
+	{
+		std::unique_ptr<VulkanShader> vertRaytrace;
+		std::unique_ptr<VulkanShader> vertScreenquad;
+		std::unique_ptr<VulkanShader> vertCopy;
 		std::unique_ptr<VulkanShader> fragRaytrace;
 		std::unique_ptr<VulkanShader> fragResolve;
+		std::unique_ptr<VulkanShader> fragBlur[2];
+		std::unique_ptr<VulkanShader> fragCopy;
 	} shaders;
 
 	struct
@@ -165,14 +231,29 @@ private:
 		std::unique_ptr<VulkanPipeline> pipeline;
 		std::unique_ptr<VulkanRenderPass> renderPass;
 		std::unique_ptr<VulkanDescriptorPool> descriptorPool;
-		std::vector<std::unique_ptr<VulkanDescriptorSet>> descriptorSets;
 		std::unique_ptr<VulkanSampler> sampler;
 	} resolve;
 
-	std::unique_ptr<VulkanFence> submitFence;
-	std::unique_ptr<VulkanCommandPool> cmdpool;
-	std::unique_ptr<VulkanCommandBuffer> cmdbuffer;
+	struct
+	{
+		std::unique_ptr<VulkanDescriptorSetLayout> descriptorSetLayout;
+		std::unique_ptr<VulkanPipelineLayout> pipelineLayout;
+		std::unique_ptr<VulkanPipeline> pipeline[2];
+		std::unique_ptr<VulkanRenderPass> renderPass;
+		std::unique_ptr<VulkanDescriptorPool> descriptorPool;
+		std::unique_ptr<VulkanSampler> sampler;
+	} blur;
 
-	std::vector<LightmapImage> atlasImages;
-	static const int atlasImageSize = 2048;
+	struct
+	{
+		std::unique_ptr<VulkanDescriptorSetLayout> descriptorSetLayout;
+		std::unique_ptr<VulkanPipelineLayout> pipelineLayout;
+		std::unique_ptr<VulkanPipeline> pipeline;
+		std::unique_ptr<VulkanRenderPass> renderPass;
+		std::unique_ptr<VulkanDescriptorPool> descriptorPool;
+		std::unique_ptr<VulkanSampler> sampler;
+	} copy;
+
+	LightmapBakeImage bakeImage;
+	static const int bakeImageSize = 2048;
 };

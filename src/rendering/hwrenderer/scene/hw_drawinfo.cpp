@@ -50,6 +50,10 @@
 #include "g_levellocals.h"
 
 EXTERN_CVAR(Float, r_visibility)
+EXTERN_CVAR(Int, lm_background_updates);
+
+CVAR(Bool, lm_always_update, false, 0)
+
 CVAR(Bool, gl_bandedswlight, false, CVAR_ARCHIVE)
 CVAR(Bool, gl_sort_textures, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, gl_no_skyclear, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -122,6 +126,7 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 	for (int i = 0; i < GLDL_TYPES; i++) drawlists[i].Reset();
 	hudsprites.Clear();
 	Coronas.Clear();
+	VisibleSurfaces.Clear();
 	vpIndex = 0;
 
 	// Fullbright information needs to be propagated from the main view.
@@ -410,6 +415,24 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 
 }
 
+void HWDrawInfo::UpdateLightmaps()
+{
+	if (!outer && VisibleSurfaces.Size() < unsigned(lm_background_updates))
+	{
+		for (auto& e : static_cast<DoomLevelSubmesh*>(level.levelMesh->StaticMesh.get())->Surfaces)
+		{
+			if (e.needsUpdate && !e.bSky && !e.portalIndex)
+			{
+				VisibleSurfaces.Push(&e);
+
+				if (VisibleSurfaces.Size() >= unsigned(lm_background_updates))
+					break;
+			}
+		}
+	}
+	screen->UpdateLightmaps(VisibleSurfaces);
+}
+
 //-----------------------------------------------------------------------------
 //
 // RenderScene
@@ -422,6 +445,8 @@ void HWDrawInfo::RenderScene(FRenderState &state)
 {
 	const auto &vp = Viewpoint;
 	RenderAll.Clock();
+
+	UpdateLightmaps();
 
 	state.SetLightMode((int)lightmode);
 

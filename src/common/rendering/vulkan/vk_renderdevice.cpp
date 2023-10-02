@@ -43,6 +43,7 @@
 #include "vulkan/vk_renderstate.h"
 #include "vulkan/vk_postprocess.h"
 #include "vulkan/accelstructs/vk_raytrace.h"
+#include "vulkan/accelstructs/vk_lightmap.h"
 #include "vulkan/pipelines/vk_renderpass.h"
 #include "vulkan/descriptorsets/vk_descriptorset.h"
 #include "vulkan/shaders/vk_shader.h"
@@ -118,10 +119,20 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 {
 	VulkanDeviceBuilder builder;
 	builder.OptionalRayQuery();
+	builder.RequireExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 	builder.Surface(surface);
 	builder.SelectDevice(vk_device);
 	SupportedDevices = builder.FindDevices(surface->Instance);
 	mDevice = builder.Create(surface->Instance);
+
+	bool supportsBindless =
+		mDevice->EnabledFeatures.DescriptorIndexing.descriptorBindingPartiallyBound &&
+		mDevice->EnabledFeatures.DescriptorIndexing.runtimeDescriptorArray &&
+		mDevice->EnabledFeatures.DescriptorIndexing.shaderSampledImageArrayNonUniformIndexing;
+	if (!supportsBindless)
+	{
+		I_FatalError("This GPU does not support the minimum requirements of this application");
+	}
 }
 
 VulkanRenderDevice::~VulkanRenderDevice()
@@ -181,6 +192,7 @@ void VulkanRenderDevice::InitializeState()
 	mDescriptorSetManager.reset(new VkDescriptorSetManager(this));
 	mRenderPassManager.reset(new VkRenderPassManager(this));
 	mRaytrace.reset(new VkRaytrace(this));
+	mLightmap.reset(new VkLightmap(this));
 
 	mBufferManager->Init();
 
@@ -193,7 +205,7 @@ void VulkanRenderDevice::InitializeState()
 	for (int threadIndex = 0; threadIndex < MaxThreads; threadIndex++)
 	{
 #ifdef __APPLE__
-		mRenderState.push_back(std::make_unique<VkRenderStateMolten>(this));
+		mRenderState.push_back(std::make_unique<VkRenderStateMolten>(this, 0));
 #else
 		mRenderState.push_back(std::make_unique<VkRenderState>(this, 0));
 #endif
@@ -463,6 +475,18 @@ TArray<uint8_t> VulkanRenderDevice::GetScreenshotBuffer(int &pitch, ESSType &col
 
 void VulkanRenderDevice::BeginFrame()
 {
+	if (levelMeshChanged)
+	{
+		levelMeshChanged = false;
+		mRaytrace->SetLevelMesh(levelMesh);
+
+		if (levelMesh && levelMesh->StaticMesh->GetSurfaceCount() > 0)
+		{
+			GetTextureManager()->CreateLightmap(levelMesh->StaticMesh->LMTextureSize, levelMesh->StaticMesh->LMTextureCount, std::move(levelMesh->StaticMesh->LMTextureData));
+			GetLightmap()->SetLevelMesh(levelMesh);
+		}
+	}
+
 	SetViewportRects(nullptr);
 	mCommands->BeginFrame();
 	mTextureManager->BeginFrame();
@@ -471,15 +495,8 @@ void VulkanRenderDevice::BeginFrame()
 	for (auto& renderstate : mRenderState)
 		renderstate->BeginFrame();
 	mDescriptorSetManager->BeginFrame();
-}
-
-void VulkanRenderDevice::InitLightmap(int LMTextureSize, int LMTextureCount, TArray<uint16_t>& LMTextureData)
-{
-	if (LMTextureData.Size() > 0)
-	{
-		GetTextureManager()->SetLightmap(LMTextureSize, LMTextureCount, LMTextureData);
-		LMTextureData.Reset(); // We no longer need this, release the memory
-	}
+	mRaytrace->BeginFrame();
+	mLightmap->BeginFrame();
 }
 
 void VulkanRenderDevice::Draw2D()
@@ -536,9 +553,18 @@ void VulkanRenderDevice::PrintStartupLog()
 	Printf("Min. uniform buffer offset alignment: %" PRIu64 "\n", limits.minUniformBufferOffsetAlignment);
 }
 
-void VulkanRenderDevice::SetLevelMesh(hwrenderer::LevelMesh* mesh)
+void VulkanRenderDevice::SetLevelMesh(LevelMesh* mesh)
 {
-	mRaytrace->SetLevelMesh(mesh);
+	levelMesh = mesh;
+	levelMeshChanged = true;
+}
+
+void VulkanRenderDevice::UpdateLightmaps(const TArray<LevelMeshSurface*>& surfaces)
+{
+	if (surfaces.Size() > 0 && levelMesh)
+	{
+		GetLightmap()->Raytrace(surfaces);
+	}
 }
 
 void VulkanRenderDevice::SetShadowMaps(const TArray<float>& lights, hwrenderer::LevelAABBTree* tree, bool newTree)
@@ -588,4 +614,13 @@ void VulkanRenderDevice::SetSceneRenderTarget(bool useSSAO)
 	{
 		renderstate->SetRenderTarget(&GetBuffers()->SceneColor, GetBuffers()->SceneDepthStencil.View.get(), GetBuffers()->GetWidth(), GetBuffers()->GetHeight(), VK_FORMAT_R16G16B16A16_SFLOAT, GetBuffers()->GetSceneSamples());
 	}
+}
+
+int VulkanRenderDevice::GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation)
+{
+	FMaterialState materialState;
+	materialState.mMaterial = material;
+	materialState.mClampMode = clampmode;
+	materialState.mTranslation = translation;
+	return static_cast<VkMaterial*>(material)->GetBindlessIndex(materialState);
 }

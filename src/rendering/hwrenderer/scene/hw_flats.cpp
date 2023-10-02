@@ -57,6 +57,41 @@ CVAR(Int, gl_breaksec, -1, 0)
 //
 //==========================================================================
 
+VSMatrix GetPlaneTextureRotationMatrix(FGameTexture* gltexture, const FVector2& uvOffset, float angle, const FVector2& scale)
+{
+	float uoffs = uvOffset.X / gltexture->GetDisplayWidth();
+	float voffs = uvOffset.Y / gltexture->GetDisplayHeight();
+
+	float yscale1 = scale.Y;
+	if (gltexture->isHardwareCanvas())
+	{
+		yscale1 = 0 - yscale1;
+	}
+
+	float xscale2 = 64.f / gltexture->GetDisplayWidth();
+	float yscale2 = 64.f / gltexture->GetDisplayHeight();
+
+	VSMatrix mat;
+	mat.loadIdentity();
+	mat.scale(scale.X, yscale1, 1.0f);
+	mat.translate(uoffs, voffs, 0.0f);
+	mat.scale(xscale2, yscale2, 1.0f);
+	mat.rotate(angle, 0.0f, 0.0f, 1.0f);
+	return mat;
+}
+
+VSMatrix GetPlaneTextureRotationMatrix(FGameTexture* gltexture, const HWSectorPlane& secplane)
+{
+	return GetPlaneTextureRotationMatrix(gltexture, secplane.Offs, -secplane.Angle, secplane.Scale);
+}
+
+VSMatrix GetPlaneTextureRotationMatrix(FGameTexture* gltexture, const sector_t* sector, int plane)
+{
+	HWSectorPlane splane;
+	splane.GetFromSector(sector, plane);
+	return GetPlaneTextureRotationMatrix(gltexture, splane);
+}
+
 bool SetPlaneTextureRotation(FRenderState& state, HWSectorPlane* secplane, FGameTexture* gltexture)
 {
 	// only manipulate the texture matrix if needed.
@@ -66,27 +101,7 @@ bool SetPlaneTextureRotation(FRenderState& state, HWSectorPlane* secplane, FGame
 		gltexture->GetDisplayWidth() != 64 ||
 		gltexture->GetDisplayHeight() != 64)
 	{
-		float uoffs = secplane->Offs.X / gltexture->GetDisplayWidth();
-		float voffs = secplane->Offs.Y / gltexture->GetDisplayHeight();
-
-		float xscale1 = secplane->Scale.X;
-		float yscale1 = secplane->Scale.Y;
-		if (gltexture->isHardwareCanvas())
-		{
-			yscale1 = 0 - yscale1;
-		}
-		float angle = -secplane->Angle;
-
-		float xscale2 = 64.f / gltexture->GetDisplayWidth();
-		float yscale2 = 64.f / gltexture->GetDisplayHeight();
-
-		VSMatrix mat;
-		mat.loadIdentity();
-		mat.scale(xscale1, yscale1, 1.0f);
-		mat.translate(uoffs, voffs, 0.0f);
-		mat.scale(xscale2, yscale2, 1.0f);
-		mat.rotate(angle, 0.0f, 0.0f, 1.0f);
-		state.SetTextureMatrix(mat);
+		state.SetTextureMatrix(GetPlaneTextureRotationMatrix(gltexture, *secplane));
 		return true;
 	}
 	return false;
@@ -191,8 +206,6 @@ void HWFlat::DrawSubsectors(HWDrawInfo *di, FRenderState &state)
 		SetupLights(di, state, section->lighthead, lightdata, sector->PortalGroup);
 	}
 	state.SetLightIndex(dynlightindex);
-
-
 	state.DrawIndexed(DT_Triangles, iboindex + section->vertexindex, section->vertexcount);
 	flatvertices += section->vertexcount;
 	flatprimitives++;
@@ -502,6 +515,27 @@ void HWFlat::ProcessSector(HWDrawInfo *di, FRenderState& state, sector_t * front
 	uint8_t sink;
 	uint8_t &srf = hacktype? sink : di->section_renderflags[di->Level->sections.SectionIndex(section)];
     const auto &vp = di->Viewpoint;
+
+	//
+	// Lightmaps
+	//
+	if (level.lightmaps)
+	{
+		for (int i = 0, count = sector->subsectorcount; i < count; ++i)
+		{
+			for (int plane = 0; plane < 2; ++plane)
+			{
+				unsigned int count = sector->e->XFloor.ffloors.Size() + 1;
+				for (unsigned int j = 0; j < count; j++)
+				{
+					if (auto lightmap = sector->subsectors[i]->lightmap[plane][j])
+					{
+						di->PushVisibleSurface(lightmap);
+					}
+				}
+			}
+		}
+	}
 
 	//
 	//

@@ -3,6 +3,7 @@
 
 #include "zvulkan/vulkanobjects.h"
 #include "hw_levelmesh.h"
+#include "common/utility/matrix.h"
 
 class VulkanRenderDevice;
 
@@ -26,65 +27,116 @@ struct CollisionNode
 	int padding3;
 };
 
+struct SurfaceInfo
+{
+	FVector3 Normal;
+	float Sky;
+	float SamplingDistance;
+	uint32_t PortalIndex;
+	int32_t TextureIndex;
+	float Alpha;
+};
+
+struct SurfaceVertex
+{
+	FVector4 pos;
+	FVector2 uv;
+	float Padding1, Padding2;
+};
+
+struct PortalInfo
+{
+	VSMatrix transformation;
+};
+
+struct SubmeshBufferLocation
+{
+	LevelSubmesh* Submesh = nullptr;
+	int VertexOffset = 0;
+	int VertexSize = 0;
+	int IndexOffset = 0;
+	int IndexSize = 0;
+	int NodeOffset = 0;
+	int NodeSize = 0;
+	int SurfaceIndexOffset = 0;
+	int SurfaceIndexSize = 0;
+	int SurfaceOffset = 0;
+	int SurfaceSize = 0;
+};
+
 class VkRaytrace
 {
 public:
 	VkRaytrace(VulkanRenderDevice* fb);
 
-	void SetLevelMesh(hwrenderer::LevelMesh* mesh);
+	void SetLevelMesh(LevelMesh* mesh);
+	void BeginFrame();
 
-	VulkanAccelerationStructure* GetAccelStruct() { return tlAccelStruct.get(); }
-	VulkanBuffer* GetVertexBuffer() { return vertexBuffer.get(); }
-	VulkanBuffer* GetIndexBuffer() { return indexBuffer.get(); }
-	VulkanBuffer* GetNodeBuffer() { return nodesBuffer.get(); }
+	VulkanAccelerationStructure* GetAccelStruct() { return TopLevelAS.AccelStruct.get(); }
+	VulkanBuffer* GetVertexBuffer() { return VertexBuffer.get(); }
+	VulkanBuffer* GetIndexBuffer() { return IndexBuffer.get(); }
+	VulkanBuffer* GetNodeBuffer() { return NodeBuffer.get(); }
+	VulkanBuffer* GetSurfaceIndexBuffer() { return SurfaceIndexBuffer.get(); }
+	VulkanBuffer* GetSurfaceBuffer() { return SurfaceBuffer.get(); }
+	VulkanBuffer* GetPortalBuffer() { return PortalBuffer.get(); }
 
 private:
+	struct BLAS
+	{
+		std::unique_ptr<VulkanBuffer> ScratchBuffer;
+		std::unique_ptr<VulkanBuffer> AccelStructBuffer;
+		std::unique_ptr<VulkanAccelerationStructure> AccelStruct;
+	};
+
 	void Reset();
 	void CreateVulkanObjects();
-	void CreateVertexAndIndexBuffers();
-	void CreateBottomLevelAccelerationStructure();
-	void CreateTopLevelAccelerationStructure();
+	void CreateBuffers();
+	void CreateStaticBLAS();
+	void CreateDynamicBLAS();
+	void CreateTopLevelAS();
+	void UploadMeshes(bool dynamicOnly);
+	void UpdateDynamicBLAS();
+	void UpdateTopLevelAS();
 
-	std::vector<CollisionNode> CreateCollisionNodes();
+	BLAS CreateBLAS(LevelSubmesh *submesh, bool preferFastBuild, int vertexOffset, int indexOffset);
+
+	int GetMaxVertexBufferSize();
+	int GetMaxIndexBufferSize();
+	int GetMaxNodeBufferSize();
+	int GetMaxSurfaceBufferSize();
+	int GetMaxSurfaceIndexBufferSize();
 
 	VulkanRenderDevice* fb = nullptr;
 
 	bool useRayQuery = true;
 
-	hwrenderer::LevelMesh NullMesh;
-	hwrenderer::LevelMesh* Mesh = nullptr;
+	LevelMesh NullMesh;
+	LevelMesh* Mesh = nullptr;
 
-	std::unique_ptr<VulkanBuffer> vertexBuffer;
-	std::unique_ptr<VulkanBuffer> indexBuffer;
-	std::unique_ptr<VulkanBuffer> transferBuffer;
-	std::unique_ptr<VulkanBuffer> nodesBuffer;
+	std::unique_ptr<VulkanBuffer> VertexBuffer;
+	std::unique_ptr<VulkanBuffer> IndexBuffer;
+	std::unique_ptr<VulkanBuffer> SurfaceIndexBuffer;
+	std::unique_ptr<VulkanBuffer> SurfaceBuffer;
+	std::unique_ptr<VulkanBuffer> PortalBuffer;
 
-	std::unique_ptr<VulkanBuffer> blScratchBuffer;
-	std::unique_ptr<VulkanBuffer> blAccelStructBuffer;
-	std::unique_ptr<VulkanAccelerationStructure> blAccelStruct;
+	std::unique_ptr<VulkanBuffer> NodeBuffer;
 
-	std::unique_ptr<VulkanBuffer> tlTransferBuffer;
-	std::unique_ptr<VulkanBuffer> tlScratchBuffer;
-	std::unique_ptr<VulkanBuffer> tlInstanceBuffer;
-	std::unique_ptr<VulkanBuffer> tlAccelStructBuffer;
-	std::unique_ptr<VulkanAccelerationStructure> tlAccelStruct;
-};
+	TArray<SurfaceVertex> Vertices;
+	static const int MaxDynamicVertices = 100'000;
+	static const int MaxDynamicIndexes = 100'000;
+	static const int MaxDynamicSurfaces = 100'000;
+	static const int MaxDynamicSurfaceIndexes = 25'000;
+	static const int MaxDynamicNodes = 10'000;
 
-class BufferTransfer
-{
-public:
-	BufferTransfer& AddBuffer(VulkanBuffer* buffer, const void* data, size_t size);
-	BufferTransfer& AddBuffer(VulkanBuffer* buffer, const void* data0, size_t size0, const void* data1, size_t size1);
-	std::unique_ptr<VulkanBuffer> Execute(VulkanDevice* device, VulkanCommandBuffer* cmdbuffer);
+	BLAS StaticBLAS;
+	BLAS DynamicBLAS;
 
-private:
-	struct BufferCopy
+	struct
 	{
-		VulkanBuffer* buffer;
-		const void* data0;
-		size_t size0;
-		const void* data1;
-		size_t size1;
-	};
-	std::vector<BufferCopy> bufferCopies;
+		std::unique_ptr<VulkanBuffer> TransferBuffer;
+		std::unique_ptr<VulkanBuffer> ScratchBuffer;
+		std::unique_ptr<VulkanBuffer> InstanceBuffer;
+		std::unique_ptr<VulkanBuffer> AccelStructBuffer;
+		std::unique_ptr<VulkanAccelerationStructure> AccelStruct;
+	} TopLevelAS;
 };
