@@ -765,7 +765,7 @@ public:
 					Level->SunColor = FVector3(float((n >> 16) & 0xFF) / 0xFF, float((n >> 8) & 0xFF) / 0xFF, float(n & 0xFF) / 0xFF);
 				}
 				break;
-			case NAME_lm_sampledistance:
+			case NAME_lm_sampledist:
 				CHECK_N(Zd | Zdt)
 				if (CheckInt(key) >= 0 && CheckInt(key) <= 0xFFFF)
 				{
@@ -773,11 +773,8 @@ public:
 				}
 				else
 				{
-					DPrintf(DMSG_WARNING, "Can't set the global lm_sampledistance to %s\n", key.GetChars());
+					DPrintf(DMSG_WARNING, "Can't set the global lm_sampledist to %s\n", key.GetChars());
 				}
-				break;
-			case NAME_lm_gridsize:
-				CHECK_N(Zd | Zdt)
 				break;
 
 			default:
@@ -1164,10 +1161,7 @@ public:
 				ld->healthgroup = CheckInt(key);
 				break;
 
-			case NAME_lm_lightcolorline:
-			case NAME_lm_lightintensityline:
-			case NAME_lm_lightdistanceline:
-			case NAME_lm_sampledist_line:
+			case NAME_lm_sampledist:
 				CHECK_N(Zd | Zdt)
 				for (int i = 0; i < 3; ++i)
 					if (!ld->LightmapSampleDistance[i])
@@ -1528,13 +1522,10 @@ public:
 					sd->Flags |= WALLF_EXTCOLOR;
 				break;
 
-			case NAME_lm_lightcolorline:
-			case NAME_lm_lightintensityline:
-			case NAME_lm_lightdistanceline:
 				CHECK_N(Zd | Zdt)
 				break;
 
-			case NAME_lm_sampledist_line:
+			case NAME_lm_sampledist:
 				CHECK_N(Zd | Zdt)
 				for (int i = 0; i < 3; ++i)
 					if (!sd->textures[i].LightmapSampleDistance)
@@ -2061,12 +2052,6 @@ public:
 					sec->health3dgroup = CheckInt(key);
 					break;
 
-				case NAME_lm_lightcolorfloor:
-				case NAME_lm_lightintensityfloor:
-				case NAME_lm_lightdistancefloor:
-				case NAME_lm_lightcolorceiling:
-				case NAME_lm_lightintensityceiling:
-				case NAME_lm_lightdistanceceiling:
 					CHECK_N(Zd | Zdt)
 					break;
 

@@ -1,8 +1,16 @@
 
 vec2 getVogelDiskSample(int sampleIndex, int sampleCount, float phi);
 
-vec3 TraceSunLight(vec3 origin)
+vec3 TraceSunLight(vec3 origin, vec3 normal, int surfaceIndex)
 {
+	float angleAttenuation = 1.0f;
+	if (surfaceIndex >= 0)
+	{
+		angleAttenuation = max(dot(normal, SunDir), 0.0);
+		if (angleAttenuation == 0.0)
+			return vec3(0.0);
+	}
+
 	const float minDistance = 0.01;
 	vec3 incoming = vec3(0.0);
 	const float dist = 32768.0;
@@ -16,7 +24,7 @@ vec3 TraceSunLight(vec3 origin)
 	vec3 ydir = cross(dir, xdir);
 
 	float lightsize = 100;
-	int step_count = 16;
+	int step_count = 10;
 	for (int i = 0; i < step_count; i++)
 	{
 		vec2 gridoffset = getVogelDiskSample(i, step_count, gl_FragCoord.x + gl_FragCoord.y * 13.37) * lightsize;
@@ -45,5 +53,5 @@ vec3 TraceSunLight(vec3 origin)
 
 #endif
 
-	return incoming;
+	return incoming * angleAttenuation;
 }
