@@ -389,7 +389,7 @@ void PPFXAA::Render(PPRenderState *renderstate)
 
 int PPFXAA::GetMaxVersion()
 {
-	return screen->glslversion >= 4.f ? 400 : 330;
+	return 460;
 }
 
 void PPFXAA::CreateShaders()
@@ -1016,7 +1016,7 @@ void PPCustomShaderInstance::SetTextures(PPRenderState *renderstate)
 	while (it.NextPair(pair))
 	{
 		FString name = pair->Value;
-		auto gtex = TexMan.GetGameTexture(TexMan.CheckForTexture(name, ETextureType::Any), true);
+		auto gtex = TexMan.GetGameTexture(TexMan.CheckForTexture(name.GetChars(), ETextureType::Any), true);
 		if (gtex && gtex->isValid())
 		{
 			// Why does this completely circumvent the normal way of handling textures?

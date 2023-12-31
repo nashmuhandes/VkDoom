@@ -48,12 +48,21 @@ public:
 	void SetTextureMatrix(const VSMatrix& matrix) override;
 	int UploadLights(const FDynLightData& lightdata) override;
 	int UploadBones(const TArray<VSMatrix>& bones) override;
+	int UploadFogballs(const TArray<Fogball>& balls) override;
 
 	// Vertices
 	std::pair<FFlatVertex*, unsigned int> AllocVertices(unsigned int count) override;
 	void SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes) override;
 	void UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count) override;
 	void ResetVertices() override;
+
+	// Draw level mesh
+	void DrawLevelMeshSurfaces(bool noFragmentShader) override;
+	void DrawLevelMeshPortals(bool noFragmentShader) override;
+	int GetNextQueryIndex() override;
+	void BeginQuery() override;
+	void EndQuery() override;
+	void GetQueryResults(int start, int count, TArray<bool>& results) override;
 
 	// Worker threads
 	void FlushCommands() override { EndRenderPass(); }
@@ -70,7 +79,7 @@ protected:
 	void ApplyDepthBias();
 	void ApplyScissor();
 	void ApplyViewport();
-	void ApplyStreamData();
+	void ApplySurfaceUniforms();
 	void ApplyMatrices();
 	void ApplyPushConstants();
 	void ApplyBufferSets();
@@ -79,6 +88,9 @@ protected:
 
 	void BeginRenderPass(VulkanCommandBuffer *cmdbuffer);
 	void WaitForStreamBuffers();
+
+	void ApplyLevelMesh();
+	void DrawLevelMeshRange(VulkanCommandBuffer* cmdbuffer, VkPipelineKey pipelineKey, int start, int count, bool noFragmentShader);
 
 	VulkanRenderDevice* fb = nullptr;
 
@@ -112,12 +124,10 @@ protected:
 
 	uint32_t mLastViewpointOffset = 0xffffffff;
 	uint32_t mLastMatricesOffset = 0xffffffff;
-	uint32_t mLastStreamDataOffset = 0xffffffff;
+	uint32_t mLastSurfaceUniformsOffset = 0xffffffff;
 	uint32_t mLastLightsOffset = 0;
+	uint32_t mLastFogballsOffset = 0;
 	uint32_t mViewpointOffset = 0;
-
-	VkStreamBufferWriter mStreamBufferWriter;
-	VkMatrixBufferWriter mMatrixBufferWriter;
 
 	int mLastVertexOffsets[2] = { 0, 0 };
 	IBuffer* mLastVertexBuffer = nullptr;
@@ -139,6 +149,8 @@ protected:
 		VkSampleCountFlagBits Samples = VK_SAMPLE_COUNT_1_BIT;
 		int DrawBuffers = 1;
 	} mRenderTarget;
+
+	TArray<uint32_t> mQueryResultsBuffer;
 };
 
 class VkRenderStateMolten : public VkRenderState

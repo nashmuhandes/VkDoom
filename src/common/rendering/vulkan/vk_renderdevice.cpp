@@ -38,12 +38,13 @@
 #include "hw_cvars.h"
 #include "hw_skydome.h"
 #include "flatvertices.h"
+#include "hw_meshbuilder.h"
 
 #include "vk_renderdevice.h"
 #include "vulkan/vk_renderstate.h"
 #include "vulkan/vk_postprocess.h"
-#include "vulkan/accelstructs/vk_raytrace.h"
-#include "vulkan/accelstructs/vk_lightmap.h"
+#include "vulkan/vk_levelmesh.h"
+#include "vulkan/vk_lightmapper.h"
 #include "vulkan/pipelines/vk_renderpass.h"
 #include "vulkan/descriptorsets/vk_descriptorset.h"
 #include "vulkan/shaders/vk_shader.h"
@@ -62,15 +63,19 @@
 #include <zvulkan/vulkancompatibledevice.h>
 #include "engineerrors.h"
 #include "c_dispatch.h"
+#include "menu.h"
+#include "cmdlib.h"
 
 FString JitCaptureStackTrace(int framesToSkip, bool includeNativeFrames, int maxFrames = -1);
 
 EXTERN_CVAR(Int, gl_tonemap)
 EXTERN_CVAR(Int, screenblocks)
 EXTERN_CVAR(Bool, cl_capfps)
+EXTERN_CVAR(Bool, r_skipmats)
 
 // Physical device info
 static std::vector<VulkanCompatibleDevice> SupportedDevices;
+int vkversion;
 
 CUSTOM_CVAR(Bool, vk_debug, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
 {
@@ -94,6 +99,16 @@ CCMD(vk_listdevices)
 	for (size_t i = 0; i < SupportedDevices.size(); i++)
 	{
 		Printf("#%d - %s\n", (int)i, SupportedDevices[i].Device->Properties.Properties.deviceName);
+	}
+}
+
+void I_BuildVKDeviceList(FOptionValues* opt)
+{
+	for (size_t i = 0; i < SupportedDevices.size(); i++)
+	{
+		unsigned int idx = opt->mValues.Reserve(1);
+		opt->mValues[idx].Value = (double)i;
+		opt->mValues[idx].Text = SupportedDevices[i].Device->Properties.Properties.deviceName;
 	}
 }
 
@@ -150,6 +165,7 @@ VulkanRenderDevice::~VulkanRenderDevice()
 
 	if (mDescriptorSetManager)
 		mDescriptorSetManager->Deinit();
+	mCommands->DeleteFrameObjects();
 	if (mTextureManager)
 		mTextureManager->Deinit();
 	if (mBufferManager)
@@ -178,8 +194,6 @@ void VulkanRenderDevice::InitializeState()
 	default:     vendorstring = "Unknown"; break;
 	}
 
-	hwcaps = RFL_SHADER_STORAGE_BUFFER | RFL_BUFFER_STORAGE;
-	glslversion = 4.50f;
 	uniformblockalignment = (unsigned int)mDevice->PhysicalDevice.Properties.Properties.limits.minUniformBufferOffsetAlignment;
 	maxuniformblock = mDevice->PhysicalDevice.Properties.Properties.limits.maxUniformBufferRange;
 
@@ -197,8 +211,8 @@ void VulkanRenderDevice::InitializeState()
 	mPostprocess.reset(new VkPostprocess(this));
 	mDescriptorSetManager.reset(new VkDescriptorSetManager(this));
 	mRenderPassManager.reset(new VkRenderPassManager(this));
-	mRaytrace.reset(new VkRaytrace(this));
-	mLightmap.reset(new VkLightmap(this));
+	mLevelMesh.reset(new VkLevelMesh(this));
+	mLightmapper.reset(new VkLightmapper(this));
 
 	mBufferManager->Init();
 
@@ -466,24 +480,24 @@ void VulkanRenderDevice::BeginFrame()
 	if (levelMeshChanged)
 	{
 		levelMeshChanged = false;
-		mRaytrace->SetLevelMesh(levelMesh);
+		mLevelMesh->SetLevelMesh(levelMesh);
 
-		if (levelMesh && levelMesh->StaticMesh->GetSurfaceCount() > 0)
+		if (levelMesh && levelMesh->StaticMesh->LMTextureCount > 0)
 		{
 			GetTextureManager()->CreateLightmap(levelMesh->StaticMesh->LMTextureSize, levelMesh->StaticMesh->LMTextureCount, std::move(levelMesh->StaticMesh->LMTextureData));
-			GetLightmap()->SetLevelMesh(levelMesh);
+			GetLightmapper()->SetLevelMesh(levelMesh);
 		}
 	}
 
 	SetViewportRects(nullptr);
 	mCommands->BeginFrame();
+	mLevelMesh->BeginFrame();
 	mTextureManager->BeginFrame();
 	mScreenBuffers->BeginFrame(screen->mScreenViewport.width, screen->mScreenViewport.height, screen->mSceneViewport.width, screen->mSceneViewport.height);
 	mSaveBuffers->BeginFrame(SAVEPICWIDTH, SAVEPICHEIGHT, SAVEPICWIDTH, SAVEPICHEIGHT);
 	mRenderState->BeginFrame();
 	mDescriptorSetManager->BeginFrame();
-	mRaytrace->BeginFrame();
-	mLightmap->BeginFrame();
+	mLightmapper->BeginFrame();
 }
 
 void VulkanRenderDevice::Draw2D()
@@ -514,6 +528,7 @@ void VulkanRenderDevice::PrintStartupLog()
 	FString apiVersion, driverVersion;
 	apiVersion.Format("%d.%d.%d", VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion));
 	driverVersion.Format("%d.%d.%d", VK_VERSION_MAJOR(props.driverVersion), VK_VERSION_MINOR(props.driverVersion), VK_VERSION_PATCH(props.driverVersion));
+	vkversion = VK_API_VERSION_MAJOR(props.apiVersion) * 100 + VK_API_VERSION_MINOR(props.apiVersion);
 
 	Printf("Vulkan device: " TEXTCOLOR_ORANGE "%s\n", props.deviceName);
 	Printf("Vulkan device type: %s\n", deviceType.GetChars());
@@ -538,9 +553,9 @@ void VulkanRenderDevice::SetLevelMesh(LevelMesh* mesh)
 	levelMeshChanged = true;
 }
 
-void VulkanRenderDevice::UpdateLightmaps(const TArray<LevelMeshSurface*>& surfaces)
+void VulkanRenderDevice::UpdateLightmaps(const TArray<LightmapTile*>& tiles)
 {
-	GetLightmap()->Raytrace(surfaces);
+	GetLightmapper()->Raytrace(tiles);
 }
 
 void VulkanRenderDevice::SetShadowMaps(const TArray<float>& lights, hwrenderer::LevelAABBTree* tree, bool newTree)
@@ -596,4 +611,115 @@ int VulkanRenderDevice::GetBindlessTextureIndex(FMaterial* material, int clampmo
 	materialState.mClampMode = clampmode;
 	materialState.mTranslation = translation;
 	return static_cast<VkMaterial*>(material)->GetBindlessIndex(materialState);
+}
+
+int VulkanRenderDevice::GetLevelMeshPipelineID(const MeshApplyData& applyData, const SurfaceUniforms& surfaceUniforms, const FMaterialState& material)
+{
+	if (levelVertexFormatIndex == -1)
+	{
+		static const std::vector<FVertexBufferAttribute> format =
+		{
+			{ 0, VATTR_VERTEX, VFmt_Float4, (int)myoffsetof(FFlatVertex, x) },
+			{ 0, VATTR_TEXCOORD, VFmt_Float2, (int)myoffsetof(FFlatVertex, u) },
+			{ 0, VATTR_LIGHTMAP, VFmt_Float2, (int)myoffsetof(FFlatVertex, lu) },
+			{ 1, VATTR_UNIFORM_INDEXES, VFmt_Int, 0 }
+		};
+		levelVertexFormatIndex = GetRenderPassManager()->GetVertexFormat({ sizeof(FFlatVertex), sizeof(int32_t) }, format);
+	}
+
+	VkPipelineKey pipelineKey;
+	pipelineKey.DrawType = DT_Triangles;
+	pipelineKey.VertexFormat = levelVertexFormatIndex;
+	pipelineKey.RenderStyle = applyData.RenderStyle;
+	pipelineKey.DepthFunc = applyData.DepthFunc;
+	pipelineKey.NumTextureLayers = material.mMaterial ? material.mMaterial->NumLayers() : 0;
+	pipelineKey.NumTextureLayers = max(pipelineKey.NumTextureLayers, SHADER_MIN_REQUIRED_TEXTURE_LAYERS);// Always force minimum 8 textures as the shader requires it
+	if (applyData.SpecialEffect > EFF_NONE)
+	{
+		pipelineKey.ShaderKey.SpecialEffect = applyData.SpecialEffect;
+		pipelineKey.ShaderKey.EffectState = 0;
+		pipelineKey.ShaderKey.AlphaTest = false;
+	}
+	else
+	{
+		int effectState = material.mOverrideShader >= 0 ? material.mOverrideShader : (material.mMaterial ? material.mMaterial->GetShaderIndex() : 0);
+		pipelineKey.ShaderKey.SpecialEffect = EFF_NONE;
+		pipelineKey.ShaderKey.EffectState = applyData.TextureEnabled ? effectState : SHADER_NoTexture;
+		if (r_skipmats && pipelineKey.ShaderKey.EffectState >= 3 && pipelineKey.ShaderKey.EffectState <= 4)
+			pipelineKey.ShaderKey.EffectState = 0;
+		pipelineKey.ShaderKey.AlphaTest = surfaceUniforms.uAlphaThreshold >= 0.f;
+	}
+
+	int tempTM = (material.mMaterial && material.mMaterial->Source()->isHardwareCanvas()) ? TM_OPAQUE : TM_NORMAL;
+	int f = applyData.TextureModeFlags;
+	if (!applyData.BrightmapEnabled) f &= ~(TEXF_Brightmap | TEXF_Glowmap);
+	if (applyData.TextureClamp) f |= TEXF_ClampY;
+	int uTextureMode = (applyData.TextureMode == TM_NORMAL && tempTM == TM_OPAQUE ? TM_OPAQUE : applyData.TextureMode) | f;
+
+	pipelineKey.ShaderKey.TextureMode = uTextureMode & 0xffff;
+	pipelineKey.ShaderKey.ClampY = (uTextureMode & TEXF_ClampY) != 0;
+	pipelineKey.ShaderKey.Brightmap = (uTextureMode & TEXF_Brightmap) != 0;
+	pipelineKey.ShaderKey.Detailmap = (uTextureMode & TEXF_Detailmap) != 0;
+	pipelineKey.ShaderKey.Glowmap = (uTextureMode & TEXF_Glowmap) != 0;
+
+	// The way GZDoom handles state is just plain insanity!
+	int fogset = 0;
+	if (applyData.FogEnabled)
+	{
+		if (applyData.FogEnabled == 2)
+		{
+			fogset = -3;	// 2D rendering with 'foggy' overlay.
+		}
+		else if (applyData.FogColor)
+		{
+			fogset = gl_fogmode;
+		}
+		else
+		{
+			fogset = -gl_fogmode;
+		}
+	}
+	pipelineKey.ShaderKey.Simple2D = (fogset == -3);
+	pipelineKey.ShaderKey.FogBeforeLights = (fogset > 0);
+	pipelineKey.ShaderKey.FogAfterLights = (fogset < 0);
+	pipelineKey.ShaderKey.FogRadial = (fogset < -1 || fogset > 1);
+	pipelineKey.ShaderKey.SWLightRadial = (gl_fogmode == 2);
+	pipelineKey.ShaderKey.SWLightBanded = false; // gl_bandedswlight;
+
+	float lightlevel = surfaceUniforms.uLightLevel;
+	if (lightlevel < 0.0)
+	{
+		pipelineKey.ShaderKey.LightMode = 0; // Default
+	}
+	else
+	{
+		/*if (mLightMode == 5)
+			pipelineKey.ShaderKey.LightMode = 3; // Build
+		else if (mLightMode == 16)
+			pipelineKey.ShaderKey.LightMode = 2; // Vanilla
+		else*/
+			pipelineKey.ShaderKey.LightMode = 1; // Software
+	}
+
+	pipelineKey.ShaderKey.UseShadowmap = gl_light_shadows == 1;
+	pipelineKey.ShaderKey.UseRaytrace = gl_light_shadows == 2;
+
+	pipelineKey.ShaderKey.GBufferPass = false;
+	pipelineKey.ShaderKey.UseLevelMesh = true;
+
+	for (unsigned int i = 0, count = levelMeshPipelineKeys.Size(); i < count; i++)
+	{
+		if (levelMeshPipelineKeys[i] == pipelineKey)
+		{
+			return i;
+		}
+	}
+
+	levelMeshPipelineKeys.Push(pipelineKey);
+	return levelMeshPipelineKeys.Size() - 1;
+}
+
+const VkPipelineKey& VulkanRenderDevice::GetLevelMeshPipelineKey(int id) const
+{
+	return levelMeshPipelineKeys[id];
 }

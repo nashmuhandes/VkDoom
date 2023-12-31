@@ -66,7 +66,7 @@ PClass *DefaultOptionMenuClass;
 
 void I_BuildALDeviceList(FOptionValues *opt);
 void I_BuildALResamplersList(FOptionValues *opt);
-
+void I_BuildVKDeviceList(FOptionValues *opt);
 
 
 DEFINE_GLOBAL_NAMED(OptionSettings, OptionMenuSettings)
@@ -1519,7 +1519,7 @@ void M_ParseMenuDefs()
 	DefaultOptionMenuSettings->Reset();
 	OptionSettings.mLinespacing = 17;
 
-	int IWADMenu = fileSystem.CheckNumForName("MENUDEF", ns_global, fileSystem.GetIwadNum());
+	int IWADMenu = fileSystem.CheckNumForName("MENUDEF", FileSys::ns_global, fileSystem.GetIwadNum());
 
 	while ((lump = fileSystem.FindLump ("MENUDEF", &lastlump)) != -1)
 	{
@@ -1628,7 +1628,7 @@ static void InitMusicMenus()
 					{
 						FString display = entry.mName;
 						display.ReplaceChars("_", ' ');
-						auto it = CreateOptionMenuItemCommand(display, FStringf("%s \"%s\"", std::get<2>(p), entry.mName.GetChars()), true);
+						auto it = CreateOptionMenuItemCommand(display.GetChars(), FStringf("%s \"%s\"", std::get<2>(p), entry.mName.GetChars()), true);
 						static_cast<DOptionMenuDescriptor*>(*menu)->mItems.Push(it);
 					}
 				}
@@ -1681,6 +1681,11 @@ void M_CreateMenus()
 	if (opt != nullptr)
 	{
 		I_BuildALResamplersList(*opt);
+	}
+	opt = OptionValues.CheckKey(NAME_Vkdevices);
+	if (opt != nullptr)
+	{
+		I_BuildVKDeviceList(*opt);
 	}
 }
 

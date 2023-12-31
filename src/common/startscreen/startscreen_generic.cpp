@@ -72,7 +72,7 @@ FGenericStartScreen::FGenericStartScreen(int max_progress)
 	: FStartScreen(max_progress)
 {
 	// at this point we do not have a working texture manager yet, so we have to do the lookup via the file system
-	int startup_lump = fileSystem.CheckNumForName("BOOTLOGO", ns_graphics);
+	int startup_lump = fileSystem.CheckNumForName("BOOTLOGO", FileSys::ns_graphics);
 
 	StartupBitmap.Create(640 * 2, 480 * 2);
 	ClearBlock(StartupBitmap, { 0, 0, 0, 255 }, 0, 0, 640 * 2, 480 * 2);
@@ -107,13 +107,14 @@ bool FGenericStartScreen::DoProgress(int advance)
 	if (CurPos < MaxPos)
 	{
 		RgbQuad bcolor = { 2, 25, 87, 255 }; // todo: make configurable
-		int numnotches = 100 * 2;
+		int numnotches = 200 * 2;
 		notch_pos = ((CurPos + 1) * numnotches) / MaxPos;
 		if (notch_pos != NotchPos)
 		{ // Time to draw another notch.
-			ClearBlock(StartupBitmap, bcolor, (320 - 50) * 2, 250 * 2, notch_pos, 4 * 2);
+			ClearBlock(StartupBitmap, bcolor, (320 - 100) * 2, 480 * 2 - 30, notch_pos, 4 * 2);
 			NotchPos = notch_pos;
-			StartupTexture->CleanHardwareData(true);
+			if (StartupTexture)
+				StartupTexture->CleanHardwareData(true);
 		}
 	}
 	return FStartScreen::DoProgress(advance);

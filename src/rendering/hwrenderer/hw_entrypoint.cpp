@@ -47,11 +47,13 @@
 #include "hwrenderer/scene/hw_fakeflat.h"
 #include "hwrenderer/scene/hw_clipper.h"
 #include "hwrenderer/scene/hw_portal.h"
-#include "hwrenderer/scene/hw_meshcache.h"
 #include "hwrenderer/scene/hw_drawcontext.h"
 #include "hw_vrmodes.h"
 
 EXTERN_CVAR(Bool, cl_capfps)
+EXTERN_CVAR(Float, r_visibility)
+EXTERN_CVAR(Bool, gl_bandedswlight)
+
 extern bool NoInterpolateView;
 
 static SWSceneDrawer *swdrawer;
@@ -108,7 +110,7 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 
 	R_SetupFrame(mainvp, r_viewwindow, camera);
 
-	if (mainview && toscreen && !(camera->Level->flags3 & LEVEL3_NOSHADOWMAP) && camera->Level->HasDynamicLights && gl_light_shadowmap && screen->allowSSBO() && (screen->hwcaps & RFL_SHADER_STORAGE_BUFFER))
+	if (mainview && toscreen && !(camera->Level->flags3 & LEVEL3_NOSHADOWMAP) && camera->Level->HasDynamicLights && gl_light_shadows > 0)
 	{
 		screen->mShadowMap->SetAABBTree(camera->Level->aabbTree);
 		screen->mShadowMap->SetCollectLights([=] {
@@ -123,15 +125,13 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 		screen->mShadowMap->SetCollectLights(nullptr);
 	}
 
-	static HWDrawContext mainthread_drawctx;
-
-	hw_ClearFakeFlat(&mainthread_drawctx);
-
-	meshcache.Update(&mainthread_drawctx, mainvp);
-
 	// Update the attenuation flag of all light defaults for each viewpoint.
 	// This function will only do something if the setting differs.
 	FLightDefaults::SetAttenuationForLevel(!!(camera->Level->flags3 & LEVEL3_ATTENUATE));
+
+	static HWDrawContext mainthread_drawctx;
+
+	hw_ClearFakeFlat(&mainthread_drawctx);
 
 	// Render (potentially) multiple views for stereo 3d
 	// Fixme. The view offsetting should be done with a static table and not require setup of the entire render state for the mode.

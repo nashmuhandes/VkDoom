@@ -14,14 +14,16 @@ class VkCommandBufferManager;
 class VkDescriptorSetManager;
 class VkRenderPassManager;
 class VkFramebufferManager;
-class VkRaytrace;
-class VkLightmap;
+class VkLevelMesh;
+class VkLightmapper;
 class VkRenderState;
 class VkStreamBuffer;
 class VkHardwareDataBuffer;
 class VkHardwareTexture;
 class VkRenderBuffers;
 class VkPostprocess;
+class VkPipelineKey;
+class VkRenderPassSetup;
 
 class VulkanRenderDevice : public SystemBaseFrameBuffer
 {
@@ -38,8 +40,8 @@ public:
 	VkFramebufferManager* GetFramebufferManager() { return mFramebufferManager.get(); }
 	VkDescriptorSetManager* GetDescriptorSetManager() { return mDescriptorSetManager.get(); }
 	VkRenderPassManager *GetRenderPassManager() { return mRenderPassManager.get(); }
-	VkRaytrace* GetRaytrace() { return mRaytrace.get(); }
-	VkLightmap* GetLightmap() { return mLightmap.get(); }
+	VkLevelMesh* GetLevelMesh() { return mLevelMesh.get(); }
+	VkLightmapper* GetLightmapper() { return mLightmapper.get(); }
 	VkRenderState *GetRenderState() { return mRenderState.get(); }
 	VkPostprocess *GetPostprocess() { return mPostprocess.get(); }
 	VkRenderBuffers *GetBuffers() { return mActiveRenderBuffers; }
@@ -63,7 +65,7 @@ public:
 	void AmbientOccludeScene(float m5) override;
 	void SetSceneRenderTarget(bool useSSAO) override;
 	void SetLevelMesh(LevelMesh* mesh) override;
-	void UpdateLightmaps(const TArray<LevelMeshSurface*>& surfaces) override;
+	void UpdateLightmaps(const TArray<LightmapTile*>& tiles) override;
 	void SetShadowMaps(const TArray<float>& lights, hwrenderer::LevelAABBTree* tree, bool newTree) override;
 	void SetSaveBuffers(bool yes) override;
 	void ImageTransitionScene(bool unknown) override;
@@ -89,6 +91,10 @@ public:
 
 	int GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation) override;
 
+	int GetLevelMeshPipelineID(const MeshApplyData& applyData, const SurfaceUniforms& surfaceUniforms, const FMaterialState& material) override;
+
+	const VkPipelineKey& GetLevelMeshPipelineKey(int id) const;
+
 private:
 	void RenderTextureView(FCanvasTexture* tex, std::function<void(IntRect &)> renderFunc) override;
 	void PrintStartupLog();
@@ -106,8 +112,8 @@ private:
 	std::unique_ptr<VkPostprocess> mPostprocess;
 	std::unique_ptr<VkDescriptorSetManager> mDescriptorSetManager;
 	std::unique_ptr<VkRenderPassManager> mRenderPassManager;
-	std::unique_ptr<VkRaytrace> mRaytrace;
-	std::unique_ptr<VkLightmap> mLightmap;
+	std::unique_ptr<VkLevelMesh> mLevelMesh;
+	std::unique_ptr<VkLightmapper> mLightmapper;
 	std::unique_ptr<VkRenderState> mRenderState;
 
 	VkRenderBuffers *mActiveRenderBuffers = nullptr;
@@ -116,6 +122,9 @@ private:
 
 	LevelMesh* levelMesh = nullptr;
 	bool levelMeshChanged = true;
+
+	int levelVertexFormatIndex = -1;
+	TArray<VkPipelineKey> levelMeshPipelineKeys;
 };
 
 class CVulkanError : public CEngineError

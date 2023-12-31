@@ -33,7 +33,6 @@
 #include "r_sky.h"
 #include "r_utility.h"
 #include "a_pickups.h"
-#include "a_corona.h"
 #include "d_player.h"
 #include "g_levellocals.h"
 #include "events.h"
@@ -57,6 +56,7 @@
 #include "hw_material.h"
 #include "hw_dynlightdata.h"
 #include "hw_renderstate.h"
+#include "hw_drawcontext.h"
 
 extern TArray<spritedef_t> sprites;
 extern TArray<spriteframe_t> SpriteFrames;
@@ -145,7 +145,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 			if (!Colormap.FadeColor.isBlack())
 			{
 				float dist = Dist2(vp.Pos.X, vp.Pos.Y, x, y);
-				int fogd = di->GetFogDensity(lightlevel, Colormap.FadeColor, Colormap.FogDensity, Colormap.BlendFactor);
+				int fogd = GetFogDensity(di->Level, di->lightmode, lightlevel, Colormap.FadeColor, Colormap.FogDensity, Colormap.BlendFactor);
 
 				// this value was determined by trial and error and is scale dependent!
 				float factor = 0.05f + exp(-fogd * dist / 62500.f);
@@ -190,7 +190,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 			state.SetObjectColor(finalcol);
 			state.SetAddColor(cursec->AdditiveColors[sector_t::sprites] | 0xff000000);
 		}
-		di->SetColor(state, lightlevel, rel, di->isFullbrightScene(), Colormap, trans);
+		SetColor(state, di->Level, di->lightmode, lightlevel, rel, di->isFullbrightScene(), Colormap, trans);
 	}
 
 
@@ -217,7 +217,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		else RenderStyle.BlendOp = STYLEOP_Fuzz;	// subtractive with models is not going to work.
 	}
 
-	if (!foglayer) di->SetFog(state, foglevel, rel, di->isFullbrightScene(), &Colormap, additivefog);
+	if (!foglayer) SetFog(state, di->Level, di->lightmode, foglevel, rel, di->isFullbrightScene(), &Colormap, additivefog, di->drawctx->portalState.inskybox);
 	else
 	{
 		state.EnableFog(false);
@@ -258,10 +258,10 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 				thiscm.Decolorize();
 			}
 
-			di->SetColor(state, thisll, rel, di->isFullbrightScene(), thiscm, trans);
+			SetColor(state, di->Level, di->lightmode, thisll, rel, di->isFullbrightScene(), thiscm, trans);
 			if (!foglayer)
 			{
-				di->SetFog(state, thislight, rel, di->isFullbrightScene(), &thiscm, additivefog);
+				SetFog(state, di->Level, di->lightmode, thislight, rel, di->isFullbrightScene(), &thiscm, additivefog, di->drawctx->portalState.inskybox);
 			}
 			SetSplitPlanes(state, *topplane, *lowplane);
 		}
@@ -274,11 +274,8 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		{
 			state.SetNormal(0, 0, 0);
 
+			CreateVertices(di, state);
 
-			if (screen->BuffersArePersistent())
-			{
-				CreateVertices(di, state);
-			}
 			if (polyoffset)
 			{
 				state.SetDepthBias(-1, -128);
@@ -289,7 +286,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 			if (foglayer)
 			{
 				// If we get here we know that we have colored fog and no fixed colormap.
-				di->SetFog(state, foglevel, rel, false, &Colormap, additivefog);
+				SetFog(state, di->Level, di->lightmode, foglevel, rel, false, &Colormap, additivefog, di->drawctx->portalState.inskybox);
 				state.SetTextureMode(TM_FOGLAYER);
 				state.SetRenderStyle(STYLE_Translucent);
 				state.Draw(DT_TriangleStrip, vertexindex, 4);
@@ -351,8 +348,8 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		state.SetDynLight(0, 0, 0);
 		state.SetRenderStyle(STYLE_Normal);
 		state.SetTextureMode(TM_NORMAL);
-		di->SetFog(state, 0, 0, false, &Colormap, true);
-		di->SetColor(state, 255, 0, true, Colormap, true);
+		SetFog(state, di->Level, di->lightmode, 0, 0, false, &Colormap, true, di->drawctx->portalState.inskybox);
+		SetColor(state, di->Level, di->lightmode, 255, 0, true, Colormap, true);
 		state.EnableTexture(false);
 
 		int scales[12][6] =
@@ -557,10 +554,6 @@ inline void HWSprite::PutSprite(HWDrawInfo *di, FRenderState& state, bool transl
 		dynlightindex = -1;
 
 	vertexindex = -1;
-	if (!screen->BuffersArePersistent())
-	{
-		CreateVertices(di, state);
-	}
 	di->AddSprite(this, translucent);
 }
 
@@ -755,15 +748,28 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	// [ZZ] allow CustomSprite-style direct picnum specification
 	bool isPicnumOverride = thing->picnum.isValid();
 
+	bool isFogball = thing->IsKindOf(NAME_Fogball);
+
 	// Don't waste time projecting sprites that are definitely not visible.
-	if ((thing->sprite == 0 && !isPicnumOverride) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
+	if ((thing->sprite == 0 && !isPicnumOverride && !isFogball) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
 	{
+		return;
+	}
+
+	if (isFogball)
+	{
+		Fogball fogball;
+		fogball.Position = FVector3(thing->Pos());
+		fogball.Radius = (float)thing->args[3];
+		fogball.Color = FVector3(thing->args[0] * (1.0f / 255.0f), thing->args[1] * (1.0f / 255.0f), thing->args[2] * (1.0f / 255.0f));
+		fogball.Fog = (float)thing->Alpha;
+		di->Fogballs.Push(fogball);
 		return;
 	}
 
 	if (thing->IsKindOf(NAME_Corona))
 	{
-		di->Coronas.Push(static_cast<ACorona*>(thing));
+		di->Coronas.Push(thing);
 		return;
 	}
 
@@ -859,7 +865,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 
 	if (thruportal != 2 && di->mClipPortal != nullptr)
 	{
-		int clipres = di->mClipPortal->ClipPoint(thingpos);
+		int clipres = di->mClipPortal->ClipPoint(thingpos.XY());
 		if (clipres == PClip_InFront) return;
 	}
 	// disabled because almost none of the actual game code is even remotely prepared for this. If desired, use the INTERPOLATE flag.
@@ -1014,7 +1020,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 		// Tests show that this doesn't look good for many decorations and corpses
 		if (spriteheight > 0 && gl_spriteclip > 0 && (thing->renderflags & RF_SPRITETYPEMASK) == RF_FACESPRITE)
 		{
-			PerformSpriteClipAdjustment(thing, thingpos, spriteheight);
+			PerformSpriteClipAdjustment(thing, thingpos.XY(), spriteheight);
 		}
 
 		switch (spritetype)
@@ -1267,18 +1273,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	if (thing->Sector->e->XFloor.lightlist.Size() != 0 && !di->isFullbrightScene() && !fullbright &&
 		RenderStyle.BlendOp != STYLEOP_Shadow && RenderStyle.BlendOp != STYLEOP_RevSub)
 	{
-		if (screen->hwcaps & RFL_NO_CLIP_PLANES)	// on old hardware we are rather limited...
-		{
-			lightlist = nullptr;
-			if (!drawWithXYBillboard && !modelframe)
-			{
-				SplitSprite(di, state, thing->Sector, hw_styleflags != STYLEHW_Solid);
-			}
-		}
-		else
-		{
-			lightlist = &thing->Sector->e->XFloor.lightlist;
-		}
+		lightlist = &thing->Sector->e->XFloor.lightlist;
 	}
 	else
 	{

@@ -16,8 +16,19 @@ layout(location = 7) in vec4 ClipDistanceA;
 layout(location = 8) in vec4 ClipDistanceB;
 #endif
 
+#if defined(USE_LEVELMESH)
+layout(location = 10) in flat int uDataIndex;
+#endif
+
 layout(location=0) out vec4 FragColor;
 #ifdef GBUFFER_PASS
 layout(location=1) out vec4 FragFog;
 layout(location=2) out vec4 FragNormal;
+#endif
+
+#if defined(USE_LEVELMESH)
+vec4 texture(int index, vec2 p)
+{
+	return texture(textures[uTextureIndex + index], p);
+}
 #endif

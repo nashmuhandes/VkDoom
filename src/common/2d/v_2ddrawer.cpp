@@ -1217,7 +1217,7 @@ void F2DDrawer::OnFrameDone()
 F2DVertexBuffer::F2DVertexBuffer()
 {
 	static const FVertexBufferAttribute format[] = {
-		{ 0, VATTR_VERTEX, VFmt_Float3, (int)myoffsetof(F2DDrawer::TwoDVertex, x) },
+		{ 0, VATTR_VERTEX, VFmt_Float4, (int)myoffsetof(F2DDrawer::TwoDVertex, x) },
 		{ 0, VATTR_TEXCOORD, VFmt_Float2, (int)myoffsetof(F2DDrawer::TwoDVertex, u) },
 		{ 0, VATTR_COLOR, VFmt_Byte4, (int)myoffsetof(F2DDrawer::TwoDVertex, color0) }
 	};
@@ -1248,7 +1248,7 @@ public:
 
 FCanvas* GetTextureCanvas(const FString& texturename)
 {
-	FTextureID textureid = TexMan.CheckForTexture(texturename, ETextureType::Wall, FTextureManager::TEXMAN_Overridable);
+	FTextureID textureid = TexMan.CheckForTexture(texturename.GetChars(), ETextureType::Wall, FTextureManager::TEXMAN_Overridable);
 	if (textureid.isValid())
 	{
 		// Only proceed if the texture is a canvas texture.

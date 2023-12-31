@@ -104,6 +104,26 @@ static char HexenSectorSpecialOk[256]={
 	1,1,1,1,1,
 };
 
+#if 0
+static const char* udmfsolidskewtypes[] =
+{
+   "none",
+   "front",
+   "back",
+   nullptr
+};
+
+static const char* udmfmaskedskewtypes[] =
+{
+   "none",
+   "front_floor",
+   "front_ceiling",
+   "back_floor",
+   "back_ceiling",
+   nullptr
+};
+#endif
+
 static inline bool P_IsThingSpecial(int specnum)
 {
 	return (specnum >= Thing_Projectile && specnum <= Thing_SpawnNoFog) ||
@@ -279,7 +299,21 @@ const char *UDMFParserBase::CheckString(FName key)
 	{
 		sc.ScriptMessage("String value expected for key '%s'", key.GetChars());
 	}
-	return parsedString;
+	return parsedString.GetChars();
+}
+
+int UDMFParserBase::MatchString(FName key, const char* const* strings, int defval)
+{
+	const char* string = CheckString(key);
+	for (int i = 0; *strings != nullptr; i++, strings++)
+	{
+		if (!stricmp(string, *strings))
+		{
+			return i;
+		}
+	}
+	sc.ScriptMessage("Unknown value %s for key '%s'", string, key.GetChars());
+	return defval;
 }
 
 //===========================================================================
@@ -1522,9 +1556,6 @@ public:
 					sd->Flags |= WALLF_EXTCOLOR;
 				break;
 
-				CHECK_N(Zd | Zdt)
-				break;
-
 			case NAME_lm_sampledist:
 				CHECK_N(Zd | Zdt)
 				for (int i = 0; i < 3; ++i)
@@ -1542,6 +1573,38 @@ public:
 			case NAME_lm_sampledist_bot:
 				CHECK_N(Zd | Zdt)
 				sd->textures[side_t::bottom].LightmapSampleDistance = CheckInt(key);
+				break;
+
+#if 0		// specs are to rough and too vague - needs to be cleared first how this works.
+			case NAME_skew_top_type:
+				CHECK_N(Zd | Zdt)
+				sd->textures[side_t::top].skew = MatchString(key, udmfsolidskewtypes, 0);
+				break;
+
+			case NAME_skew_middle_type:
+				CHECK_N(Zd | Zdt)
+					sd->textures[side_t::mid].skew = MatchString(key, udmfmaskedskewtypes, 0);
+				break;
+
+			case NAME_skew_bottom_type:
+				CHECK_N(Zd | Zdt)
+					sd->textures[side_t::bottom].skew = MatchString(key, udmfsolidskewtypes, 0);
+				break;
+#endif
+
+			case NAME_skew_top:
+				CHECK_N(Zd | Zdt)
+					sd->textures[side_t::top].skew = CheckInt(key);
+				break;
+
+			case NAME_skew_middle:
+				CHECK_N(Zd | Zdt)
+					sd->textures[side_t::mid].skew = CheckInt(key);
+				break;
+
+			case NAME_skew_bottom:
+				CHECK_N(Zd | Zdt)
+					sd->textures[side_t::bottom].skew = CheckInt(key);
 				break;
 
 			default:
@@ -2052,9 +2115,6 @@ public:
 					sec->health3dgroup = CheckInt(key);
 					break;
 
-					CHECK_N(Zd | Zdt)
-					break;
-
 				case NAME_lm_sampledist_floor:
 					CHECK_N(Zd | Zdt)
 					sec->planes[sector_t::floor].LightmapSampleDistance = CheckInt(key);
@@ -2064,6 +2124,10 @@ public:
 					CHECK_N(Zd | Zdt)
 					sec->planes[sector_t::ceiling].LightmapSampleDistance = CheckInt(key);
 					break;
+
+				case NAME_lm_dynamic:
+					Flag(sec->Flags, SECF_LM_DYNAMIC, key);
+					continue;
 
 				default:
 					if (strnicmp("user_", key.GetChars(), 5))
@@ -2128,6 +2192,7 @@ public:
 			DVector3 n = DVector3(cp[0], cp[1], cp[2]).Unit();
 			sec->ceilingplane.set(n.X, n.Y, n.Z, cp[3]);
 		}
+		sec->CheckOverlap();
 
 		if (lightcolor == ~0u && fadecolor == ~0u && desaturation == -1 && fogdensity == -1)
 		{
@@ -2266,6 +2331,19 @@ public:
 						sides[side].linedef = &lines[line];
 						sides[side].sector = &Level->sectors[intptr_t(sides[side].sector)];
 						lines[line].sidedef[sd] = &sides[side];
+
+#if 0
+						if (sd == 1)
+						{
+							// fix flags for backside. The definition is linedef relative, not sidedef relative.
+							static const uint8_t swaps[] = { 0, side_t::skew_back, side_t::skew_front };
+							static const uint8_t swapsm[] = {0, side_t::skew_back_floor, side_t::skew_back_ceiling, side_t::skew_front_floor, side_t::skew_front_ceiling};
+
+							sides[side].textures[side_t::top].skew = swaps[sides[side].textures[side_t::top].skew];
+							sides[side].textures[side_t::bottom].skew = swaps[sides[side].textures[side_t::bottom].skew];
+							sides[side].textures[side_t::mid].skew = swapsm[sides[side].textures[side_t::mid].skew];
+						}
+#endif
 
 						loader->ProcessSideTextures(!isExtended, &sides[side], sides[side].sector, &ParsedSideTextures[mapside],
 							lines[line].special, lines[line].args[0], &tempalpha[sd], missingTex);

@@ -1,5 +1,5 @@
 ===============================================================================
-Universal Doom Map Format ZDoom extensions v1.15 - 14.12.2010
+Universal Doom Map Format ZDoom extensions v1.33 15.09.2023
 
 
     Copyright (c) 2008 Christoph Oelckers.
@@ -118,6 +118,8 @@ Note: All <bool> fields default to false unless mentioned otherwise.
       blockuse = <bool>;          // Line blocks all use actions
       blocksight = <bool>;        // Line blocks monster line of sight
       blockhitscan = <bool>;      // Line blocks hitscan attacks
+      blockfloaters = <bool>;     // Line blocks floating monsters' movement.
+      blocklandmonsters = <bool>; // Line blocks walking monsters' movement.
       locknumber = <int>;         // Line special is locked
       arg0str = <string>;         // Alternate string-based version of arg0
       moreids = <string>;         // Additional line IDs, specified as a space separated list of numbers (e.g. "2 666 1003 4505")
@@ -231,6 +233,12 @@ Note: All <bool> fields default to false unless mentioned otherwise.
       lm_sampledist_top = <int>;    // ZDRay customizable sampling distance for this sidedef's top part. Defines the map units each lightmap texel covers. Must be in powers of two. Default = 0
       lm_sampledist_mid = <int>;    // ZDRay customizable sampling distance for this sidedef's middle part. Defines the map units each lightmap texel covers. Must be in powers of two. Default = 0
       lm_sampledist_bot = <int>;    // ZDRay customizable sampling distance for this sidedef's bottom part. Defines the map units each lightmap texel covers. Must be in powers of two. Default = 0	  
+	  
+	  skew_top = <int>;             // enables skewing of wall textures, the skewing angle will be aligned to one of the 4 planes touching the floor. 
+      skew_middle = <int>;          // Vertical texture alignment defines the position at the leftmost point of the wall.
+      skew_bottom = <int>;          // Possible values: 0 = no skewing, 1 = align to front floor, 2 = align to front ceiling, 3 = align to back floor, 4 = align to back ceiling.
+	                                // Front/Back are relative to the sidedef, not the owning linedef. Default = 0.
+
    }
 
    sector
@@ -338,6 +346,7 @@ Note: All <bool> fields default to false unless mentioned otherwise.
 
       lm_sampledist_floor = <int>;      // ZDRay customizable sampling distance for this sector's floor. Defines the map units each lightmap texel covers. Must be in powers of two. Default = 0
       lm_sampledist_ceiling = <int>;    // ZDRay customizable sampling distance for this sector's ceiling. Defines the map units each lightmap texel covers. Must be in powers of two. Default = 0
+      lm_dynamic = <bool>;              // ZDRay marks a sector as having dynamic lightmaps that can update, move, change color, turn on/off etc
    }
 
    thing
@@ -534,8 +543,14 @@ Blocklandmonsters MBF21 flag
 1.33 06.11.2021
 Added separate light levels for sidedef tiers (top/mid/bottom)
 
-1.34 09.11.2023
+1.34 11.09.2023
 Added/updated ZDRay/lightmap-related properties.
+
+1.35 15.09.2023
+fixed omissions: Blocklandmonsters and Blockfloaters line flags.
+
+1.36 20.10.2023
+Sidedef skewing properties
 
 ===============================================================================
 EOF
