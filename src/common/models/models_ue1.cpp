@@ -71,9 +71,9 @@ void FUE1Model::LoadGeometry()
 {
 	const char *buffer, *buffer2;
 	auto lump =  fileSystem.ReadFile(mDataLump);
-	buffer = lump.GetString();
+	buffer = lump.string();
 	auto lump2 =  fileSystem.ReadFile(mAnivLump);
-	buffer2 = lump2.GetString();
+	buffer2 = lump2.string();
 	// map structures
 	dhead = (const d3dhead*)(buffer);
 	dpolys = (const d3dpoly*)(buffer+sizeof(d3dhead));
@@ -232,7 +232,7 @@ int FUE1Model::FindFrame(const char* name, bool nodefault)
 	return index;
 }
 
-void FUE1Model::RenderFrame( FModelRenderer *renderer, FGameTexture *skin, int frame, int frame2, double inter, int translation, const FTextureID* surfaceskinids, const TArray<VSMatrix>& boneData, int boneStartPosition)
+void FUE1Model::RenderFrame( FModelRenderer *renderer, FGameTexture *skin, int frame, int frame2, double inter, FTranslationID translation, const FTextureID* surfaceskinids, const TArray<VSMatrix>& boneData, int boneStartPosition)
 {
 	// the moment of magic
 	if ( (frame < 0) || (frame2 < 0) || (frame >= numFrames) || (frame2 >= numFrames) ) return;

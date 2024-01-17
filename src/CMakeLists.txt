@@ -597,6 +597,7 @@ file( GLOB HEADER_FILES
 	common/thirdparty/rapidjson/*.h
 	common/thirdparty/math/*h
 	common/thirdparty/libsmackerdec/include/*.h
+	common/thirdparty/utf8proc/*.h
 	common/rendering/*.h
 	common/rendering/hwrenderer/data/*.h
 	common/rendering/vulkan/*.h
@@ -616,6 +617,7 @@ file( GLOB HEADER_FILES
 	common/scripting/frontend/*.h
 
 	utility/*.h
+	launcher/*.h
 	scripting/*.h
 	scripting/backend/*.h
 	scripting/decorate/*.h
@@ -857,6 +859,7 @@ set (PCH_SOURCES
 	playsim/mapthinkers/a_pillar.cpp
 	playsim/mapthinkers/a_plats.cpp
 	playsim/mapthinkers/a_pusher.cpp
+	playsim/mapthinkers/a_thruster.cpp
 	playsim/mapthinkers/a_scroll.cpp
 	playsim/mapthinkers/dsectoreffect.cpp
 	playsim/a_pickups.cpp
@@ -956,6 +959,12 @@ set (PCH_SOURCES
 	rendering/swrenderer/textures/warptexture.cpp
 	rendering/swrenderer/textures/swcanvastexture.cpp
 	events.cpp
+	launcher/launcherwindow.cpp
+	launcher/launcherbanner.cpp
+	launcher/launcherbuttonbar.cpp
+	launcher/playgamepage.cpp
+	launcher/settingspage.cpp
+
 	common/audio/sound/i_sound.cpp
 	common/audio/sound/oalsound.cpp
 	common/audio/sound/s_environment.cpp
@@ -970,6 +979,7 @@ set (PCH_SOURCES
 	common/2d/v_drawtext.cpp
 	common/2d/v_draw.cpp
 	common/2d/wipe.cpp
+	common/thirdparty/animlib.cpp
 	common/thirdparty/gain_analysis.cpp
 	common/thirdparty/sfmt/SFMT.cpp
 	common/startscreen/startscreen.cpp
@@ -978,7 +988,6 @@ set (PCH_SOURCES
 	common/startscreen/startscreen_strife.cpp
 	common/startscreen/startscreen_generic.cpp
 	common/startscreen/endoom.cpp
-	common/widgets/launcherwindow.cpp
 	common/widgets/errorwindow.cpp
 	common/widgets/netstartwindow.cpp
 	common/widgets/widgetresourcedata.cpp
@@ -1004,7 +1013,6 @@ set (PCH_SOURCES
 	common/textures/skyboxtexture.cpp
 	common/textures/animtexture.cpp
 	common/textures/v_collection.cpp
-	common/textures/animlib.cpp
 	common/textures/formats/automaptexture.cpp
 	common/textures/formats/brightmaptexture.cpp
 	common/textures/formats/buildtexture.cpp
@@ -1066,6 +1074,7 @@ set (PCH_SOURCES
 	common/utility/name.cpp
 	common/utility/r_memory.cpp
 	common/utility/bounds.cpp
+	common/utility/writezip.cpp
 	common/thirdparty/base64.cpp
 	common/thirdparty/md5.cpp
  	common/thirdparty/superfasthash.cpp
@@ -1162,6 +1171,7 @@ set( GAME_SOURCES
 	${PCH_SOURCES}
 	common/utility/x86.cpp
 	common/thirdparty/strnatcmp.c
+	common/thirdparty/utf8proc/utf8proc.c
 	common/thirdparty/stb/stb_sprintf.c
 	common/utility/zstring.cpp
 	common/utility/findfile.cpp
@@ -1196,12 +1206,16 @@ set( GAME_SOURCES
 	common/filesystem/source/file_pak.cpp
 	common/filesystem/source/file_whres.cpp
 	common/filesystem/source/file_ssi.cpp
+	common/filesystem/source/file_hog.cpp
+	common/filesystem/source/file_mvl.cpp
 	common/filesystem/source/file_directory.cpp
 	common/filesystem/source/resourcefile.cpp
 	common/filesystem/source/files.cpp
 	common/filesystem/source/files_decompress.cpp
 	common/filesystem/source/fs_findfile.cpp
 	common/filesystem/source/fs_stringpool.cpp
+	common/filesystem/source/unicode.cpp
+	common/filesystem/source/critsec.cpp
 
 )
 
@@ -1243,6 +1257,7 @@ include_directories(
 	common/thirdparty/libsmackerdec/include
 	common/thirdparty
 	common/thirdparty/stb
+	common/thirdparty/utf8proc
 	common/textures
 	common/textures/formats
 	common/textures/hires
@@ -1287,6 +1302,7 @@ include_directories(
 	scripting
 	scripting/zscript
 	rendering
+	launcher
 	../libraries/ZVulkan/include
 	../libraries/ZWidget/include
 	../libraries/dp_rect_pack
@@ -1488,12 +1504,14 @@ source_group("Common\\Third Party\\Math" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SO
 source_group("Common\\Third Party\\RapidJSON" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/rapidjson/.+")
 source_group("Common\\Third Party\\SFMT" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/sfmt/.+")
 source_group("Common\\Third Party\\stb" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/stb/.+")
+source_group("Common\\Third Party\\utf8proc" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/utf8proc/.+")
 source_group("Utility" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/utility/.+")
 source_group("Utility\\Node Builder" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/utility/nodebuilder/.+")
 source_group("Utility\\Smackerdec" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/smackerdec/.+")
 source_group("Utility\\Smackerdec\\Headers" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/libsmackerdec/include/.+")
 source_group("Utility\\Smackerdec\\Sources" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/libsmackerdec/src/.+")
 source_group("Statusbar" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/g_statusbar/.+")
+source_group("Launcher" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/launcher/.+")
 source_group("Versioning" FILES version.h win32/zdoom.rc)
 source_group("Xlat" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/xlat/.+" FILES ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.c ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.h)
 source_group("Source Files" FILES ${CMAKE_CURRENT_BINARY_DIR}/sc_man_scanner.h common/engine/sc_man_scanner.re)

@@ -215,10 +215,10 @@ FileReader FZipPatReader::OpenFile(const char *name)
 	FileReader fr;
 	if (resf != nullptr)
 	{
-		auto lump = resf->FindLump(name);
-		if (lump != nullptr)
+		auto lump = resf->FindEntry(name);
+		if (lump >= 0)
 		{
-			return lump->NewReader();
+			return resf->GetEntryReader(lump, FileSys::READER_NEW, FileSys::READERFLAG_SEEKABLE);
 		}
 	}
 	fr.OpenFile(name);
@@ -367,10 +367,10 @@ void FSoundFontManager::ProcessOneFile(const char* fn)
 			auto zip = FResourceFile::OpenResourceFile(fn, true);
 			if (zip != nullptr)
 			{
-				if (zip->LumpCount() > 1)	// Anything with just one lump cannot possibly be a packed GUS patch set so skip it right away and simplify the lookup code
+				if (zip->EntryCount() > 1)	// Anything with just one lump cannot possibly be a packed GUS patch set so skip it right away and simplify the lookup code
 				{
-					auto zipl = zip->FindLump("timidity.cfg");
-					if (zipl != nullptr)
+					auto zipl = zip->FindEntry("timidity.cfg");
+					if (zipl >= 0)
 					{
 						// It seems like this is what we are looking for
 						FSoundFontInfo sft = { fb, fbe, fn, SF_GUS };
@@ -465,19 +465,16 @@ const FSoundFontInfo *FSoundFontManager::FindSoundFont(const char *name, int all
 //
 //==========================================================================
 
-FSoundFontReader *FSoundFontManager::OpenSoundFont(const char *name, int allowed)
+FSoundFontReader *FSoundFontManager::OpenSoundFont(const char *const name, int allowed)
 {
-
+	if (name == nullptr) return nullptr;
 	// First check if the given name is inside the loaded resources.
 	// To avoid clashes this will only be done if the name has the '.cfg' extension.
 	// Sound fonts cannot be loaded this way.
-	if (name != nullptr)
+	const char *p = name + strlen(name) - 4;
+	if (p > name && !stricmp(p, ".cfg") && fileSystem.CheckNumForFullName(name) >= 0)
 	{
-		const char *p = name + strlen(name) - 4;
-		if (p > name && !stricmp(p, ".cfg") && fileSystem.CheckNumForFullName(name) >= 0)
-		{
-			return new FLumpPatchSetReader(name);
-		}
+		return new FLumpPatchSetReader(name);
 	}
 
 	// Next check if the file is a .sf file

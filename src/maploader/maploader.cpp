@@ -84,6 +84,7 @@
 #include "texturemanager.h"
 #include "hw_vertexbuilder.h"
 #include "version.h"
+#include "fs_decompress.h"
 
 #include "common/utility/halffloat.h"
 
@@ -95,6 +96,7 @@ enum
 CVAR (Bool, genblockmap, false, CVAR_SERVERINFO|CVAR_GLOBALCONFIG);
 CVAR (Bool, gennodes, false, CVAR_SERVERINFO|CVAR_GLOBALCONFIG);
 CVAR (Bool, genlightmaps, false, CVAR_GLOBALCONFIG);
+CVAR (Bool, ignorelightmaplump, false, CVAR_GLOBALCONFIG);
 
 inline bool P_LoadBuildMap(uint8_t *mapdata, size_t len, FMapThing **things, int *numthings)
 {
@@ -741,7 +743,7 @@ bool MapLoader::LoadExtendedNodes (FileReader &dalump, uint32_t id)
 		if (compressed)
 		{
 			FileReader zip;
-			if (zip.OpenDecompressor(dalump, -1, FileSys::METHOD_ZLIB, false, true))
+			if (OpenDecompressor(zip, dalump, -1, FileSys::METHOD_ZLIB, FileSys::DCF_EXCEPTIONS))
 			{
 				LoadZNodes(zip, type);
 				return true;
@@ -1171,7 +1173,6 @@ bool MapLoader::LoadNodes (MapData * map)
 	int 		k;
 	nodetype	*mn;
 	node_t* 	no;
-	uint16_t*		used;
 	int			lumplen = map->Size(ML_NODES);
 	int			maxss = map->Size(ML_SSECTORS) / sizeof(subsectortype);
 
@@ -1184,8 +1185,8 @@ bool MapLoader::LoadNodes (MapData * map)
 	
 	auto &nodes = Level->nodes;
 	nodes.Alloc(numnodes);		
-	used = (uint16_t *)alloca (sizeof(uint16_t)*numnodes);
-	memset (used, 0, sizeof(uint16_t)*numnodes);
+	TArray<uint16_t> used(numnodes, true);
+	memset (used.data(), 0, sizeof(uint16_t) * numnodes);
 
 	auto mnp = map->Read(ML_NODES);
 	mn = (nodetype*)(mnp.Data() + nodetype::NF_LUMPOFFSET);
@@ -3012,25 +3013,32 @@ void MapLoader::InitLevelMesh(MapData* map)
 	Level->levelMesh = new DoomLevelMesh(*Level);
 
 	// Lightmap binding/loading
-	LoadLightmap(map);
+	if (!LoadLightmap(map))
+	{
+		if (Level->lightmaps)
+		{
+			Level->levelMesh->StaticMesh->SetupTileTransforms();
+			Level->levelMesh->StaticMesh->PackLightmapAtlas(0);
+		}
+	}
 }
 
 bool MapLoader::LoadLightmap(MapData* map)
 {
-	if (!Level->lightmaps || !map->Size(ML_LIGHTMAP))
+	if (!Level->lightmaps || !map->Size(ML_LIGHTMAP) || ignorelightmaplump)
 		return false;
 
 	FileReader fr;
-	if (!fr.OpenDecompressor(map->Reader(ML_LIGHTMAP), -1, FileSys::METHOD_ZLIB, false))
+	if (!OpenDecompressor(fr, map->Reader(ML_LIGHTMAP), -1, FileSys::METHOD_ZLIB))
 		return false;
 
 	int version = fr.ReadInt32();
-	if (version < 2)
+	if (version < 3)
 	{
 		Printf(PRINT_HIGH, "LoadLightmap: This is an old unsupported version of the lightmap lump. Please rebuild the map with a newer version of zdray.\n");
 		return false;
 	}
-	else if (version != 2)
+	else if (version != 3)
 	{
 		Printf(PRINT_HIGH, "LoadLightmap: unsupported lightmap lump version\n");
 		return false;
@@ -3038,14 +3046,13 @@ bool MapLoader::LoadLightmap(MapData* map)
 
 	uint32_t numTiles = fr.ReadUInt32();
 	uint32_t numTexPixels = fr.ReadUInt32();
-	uint32_t numTexCoords = fr.ReadUInt32(); // To do: remove from a future version of the format. We don't need this.
 
 	if (developer >= 5)
 	{
-		Printf("LoadLightmap: Tiles: %u, Pixels: %u, UVs: %u\n", numTiles, numTexPixels, numTexCoords);
+		Printf("LoadLightmap: Tiles: %u, Pixels: %u\n", numTiles, numTexPixels);
 	}
 
-	if (numTiles == 0 || numTexCoords == 0 || numTexPixels == 0)
+	if (numTiles == 0 || numTexPixels == 0)
 		return false;
 
 	int errors = 0;
@@ -3058,9 +3065,9 @@ bool MapLoader::LoadLightmap(MapData* map)
 		uint32_t controlSector; // 0xFFFFFFFF is none
 		uint16_t width, height; // in pixels
 		uint32_t pixelsOffset; // offset in pixels array
-		uint32_t uvCount, uvOffset;
-
-		DoomLevelMeshSurface* targetSurface;
+		FVector3 translateWorldToLocal;
+		FVector3 projLocalToU;
+		FVector3 projLocalToV;
 	};
 
 	TArray<TileEntry> tileEntries;
@@ -3076,8 +3083,15 @@ bool MapLoader::LoadLightmap(MapData* map)
 		entry.width = fr.ReadUInt16();
 		entry.height = fr.ReadUInt16();
 		entry.pixelsOffset = fr.ReadUInt32();
-		entry.uvCount = fr.ReadUInt32();
-		entry.uvOffset = fr.ReadUInt32();
+		entry.translateWorldToLocal.X = fr.ReadFloat();
+		entry.translateWorldToLocal.Y = fr.ReadFloat();
+		entry.translateWorldToLocal.Z = fr.ReadFloat();
+		entry.projLocalToU.X = fr.ReadFloat();
+		entry.projLocalToU.Y = fr.ReadFloat();
+		entry.projLocalToU.Z = fr.ReadFloat();
+		entry.projLocalToV.X = fr.ReadFloat();
+		entry.projLocalToV.Y = fr.ReadFloat();
+		entry.projLocalToV.Z = fr.ReadFloat();
 	}
 
 	// Load pixels
@@ -3086,17 +3100,8 @@ bool MapLoader::LoadLightmap(MapData* map)
 	uint8_t* data = (uint8_t*)&textureData[0];
 	fr.Read(data, numTexPixels * 3 * sizeof(uint16_t));
 
-	// Load texture coordinates
-	// TArray<FVector2> zdrayUvs;
-	// zdrayUvs.Resize(numTexCoords);
-	// fr.Read(&zdrayUvs[0], numTexCoords * 2 * sizeof(float));
-
 	auto submesh = Level->levelMesh->StaticMesh.get();
 	const auto textureSize = submesh->LMTextureSize;
-
-	// Start with empty lightmap textures
-	submesh->LMTextureData.Resize(submesh->LMTextureCount * textureSize * textureSize * 3);
-	memset(submesh->LMTextureData.Data(), 0, submesh->LMTextureData.Size() * sizeof(uint16_t));
 
 	// Create lookup for finding tiles
 	std::map<LightmapTileBinding, LightmapTile*> levelTiles;
@@ -3105,7 +3110,8 @@ bool MapLoader::LoadLightmap(MapData* map)
 		levelTiles[tile.Binding] = &tile;
 	}
 
-	// Bind tiles and copy their pixels to the texture
+	// Bind tiles and use the lump's tile transform
+	TArray<std::pair<const TileEntry*, LightmapTile*>> foundBindings;
 	for (const TileEntry& entry : tileEntries)
 	{
 		LightmapTileBinding binding;
@@ -3116,40 +3122,69 @@ bool MapLoader::LoadLightmap(MapData* map)
 		auto it = levelTiles.find(binding);
 		if (it == levelTiles.end())
 		{
-			if (errors < 10 && developer >= 1)
+			// ZDRay and HWWall don't always agree on which surfaces are visible.
+			// It is too much work making sure ZDRay only generates surfaces that HWWall wants to use, so just ignore the extra tiles.
+			// Yes this is lazy. No, I don't care. I don't get paid for this and its already boring as fuck.
+#if 0
+			if (errors < 100 && developer >= 1)
 				Printf("Could not find lightmap tile in level mesh (type = %d, index = %d, control sector = %d)\n", entry.type, entry.typeIndex, entry.controlSector);
+			errors++;
+#endif
+			continue;
+		}
+
+		if (entry.width == 0 || entry.height == 0)
+		{
+			if (errors < 100 && developer >= 1)
+				Printf("Invalid lightmap tile found (type = %d, index = %d, control sector = %d)\n", entry.type, entry.typeIndex, entry.controlSector);
 			errors++;
 			continue;
 		}
 
 		LightmapTile* tile = it->second;
 
-		// To do: add transform info to the lump so that we can stretch the pixels as the lump lightmapper might be using fixed point coordinates that could cause alignment issues
+		tile->AtlasLocation.Width = entry.width;
+		tile->AtlasLocation.Height = entry.height;
+		tile->Transform.TranslateWorldToLocal = entry.translateWorldToLocal;
+		tile->Transform.ProjLocalToU = entry.projLocalToU;
+		tile->Transform.ProjLocalToV = entry.projLocalToV;
+		tile->NeedsUpdate = false;
 
-		if (tile->AtlasLocation.Width != entry.width || tile->AtlasLocation.Height != entry.height)
-		{
-			if (errors < 10 && developer >= 1)
-				Printf("Lightmap tile size mismatch (type = %d, index = %d, control sector = %d)\n", entry.type, entry.typeIndex, entry.controlSector);
-			errors++;
-			continue;
-		}
+		foundBindings.Push({ &entry, tile });
+	}
 
-		const uint16_t* src = textureData.Data() + entry.pixelsOffset;
+	// Setup the tile transform for any tile missing in the lump (shouldn't be any, but if there are we let the lightmapper bake them)
+	for (auto& tile : submesh->LightmapTiles)
+	{
+		if (tile.NeedsUpdate)
+			tile.SetupTileTransform(submesh->LMTextureSize);
+	}
+
+	// Place all tiles in atlas textures
+	submesh->PackLightmapAtlas(0);
+
+	// Start with empty lightmap textures
+	submesh->LMTextureData.Resize(submesh->LMTextureCount * textureSize * textureSize * 3);
+	memset(submesh->LMTextureData.Data(), 0, submesh->LMTextureData.Size() * sizeof(uint16_t));
+
+	// Copy tile pixels to the texture
+	for (auto& binding : foundBindings)
+	{
+		const TileEntry* entry = binding.first;
+		LightmapTile* tile = binding.second;
+
+		const uint16_t* src = textureData.Data() + entry->pixelsOffset;
 		uint16_t* dst = &submesh->LMTextureData[tile->AtlasLocation.ArrayIndex * textureSize * textureSize * 3];
+		int destx = tile->AtlasLocation.X;
+		int desty = tile->AtlasLocation.Y;
+		int width = tile->AtlasLocation.Width;
+		int height = tile->AtlasLocation.Height;
 
-		int x = tile->AtlasLocation.X;
-		int y = tile->AtlasLocation.Y;
-		int w = tile->AtlasLocation.Width;
-		int h = tile->AtlasLocation.Height;
-
-		for (int yy = 0; yy < w; yy++)
+		for (int yy = 0; yy < height; yy++)
 		{
-			const uint16_t* srcline = src + yy * w * 3;
-			uint16_t* dstline = dst + (x + yy * textureSize) * 3;
-			for (int xx = 0, end = w * 3; xx < end; xx++)
-			{
-				dstline[xx] = srcline[xx];
-			}
+			uint16_t* dstline = dst + (destx + (desty + yy) * textureSize) * 3;
+			const uint16_t* srcline = src + yy * (width * 3);
+			memcpy(dstline, srcline, width * 6);
 		}
 
 		tile->NeedsUpdate = false;

@@ -64,7 +64,7 @@ Win32Window::Win32Window(DisplayWindowHost* windowHost) : WindowHost(windowHost)
 	WNDCLASSEX classdesc = {};
 	classdesc.cbSize = sizeof(WNDCLASSEX);
 	classdesc.hInstance = GetModuleHandle(0);
-	classdesc.style = CS_VREDRAW | CS_HREDRAW;
+	classdesc.style = CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS;
 	classdesc.lpszClassName = L"ZWidgetWindow";
 	classdesc.lpfnWndProc = &Win32Window::WndProc;
 	RegisterClassEx(&classdesc);
@@ -209,6 +209,16 @@ void Win32Window::UnlockCursor()
 	}
 }
 
+void Win32Window::CaptureMouse()
+{
+	SetCapture(WindowHandle);
+}
+
+void Win32Window::ReleaseMouseCapture()
+{
+	ReleaseCapture();
+}
+
 void Win32Window::Update()
 {
 	InvalidateRect(WindowHandle, nullptr, FALSE);
@@ -217,6 +227,15 @@ void Win32Window::Update()
 bool Win32Window::GetKeyState(EInputKey key)
 {
 	return ::GetKeyState((int)key) & 0x8000; // High bit (0x8000) means key is down, Low bit (0x0001) means key is sticky on (like Caps Lock, Num Lock, etc.)
+}
+
+void Win32Window::SetCursor(StandardCursor cursor)
+{
+	if (cursor != CurrentCursor)
+	{
+		CurrentCursor = cursor;
+		UpdateCursor();
+	}
 }
 
 Rect Win32Window::GetWindowFrame() const
@@ -411,7 +430,7 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 		}
 		else
 		{
-			SetCursor((HCURSOR)LoadImage(0, IDC_ARROW, IMAGE_CURSOR, LR_DEFAULTSIZE, LR_DEFAULTSIZE, LR_SHARED));
+			UpdateCursor();
 		}
 
 		WindowHost->OnWindowMouseMove(GetLParamPos(lparam));
@@ -419,6 +438,10 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 	else if (msg == WM_LBUTTONDOWN)
 	{
 		WindowHost->OnWindowMouseDown(GetLParamPos(lparam), IK_LeftMouse);
+	}
+	else if (msg == WM_LBUTTONDBLCLK)
+	{
+		WindowHost->OnWindowMouseDoubleclick(GetLParamPos(lparam), IK_LeftMouse);
 	}
 	else if (msg == WM_LBUTTONUP)
 	{
@@ -428,6 +451,10 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 	{
 		WindowHost->OnWindowMouseDown(GetLParamPos(lparam), IK_MiddleMouse);
 	}
+	else if (msg == WM_MBUTTONDBLCLK)
+	{
+		WindowHost->OnWindowMouseDoubleclick(GetLParamPos(lparam), IK_MiddleMouse);
+	}
 	else if (msg == WM_MBUTTONUP)
 	{
 		WindowHost->OnWindowMouseUp(GetLParamPos(lparam), IK_MiddleMouse);
@@ -436,6 +463,10 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 	{
 		WindowHost->OnWindowMouseDown(GetLParamPos(lparam), IK_RightMouse);
 	}
+	else if (msg == WM_RBUTTONDBLCLK)
+	{
+		WindowHost->OnWindowMouseDoubleclick(GetLParamPos(lparam), IK_RightMouse);
+	}
 	else if (msg == WM_RBUTTONUP)
 	{
 		WindowHost->OnWindowMouseUp(GetLParamPos(lparam), IK_RightMouse);
@@ -443,7 +474,15 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 	else if (msg == WM_MOUSEWHEEL)
 	{
 		double delta = GET_WHEEL_DELTA_WPARAM(wparam) / (double)WHEEL_DELTA;
-		WindowHost->OnWindowMouseWheel(GetLParamPos(lparam), delta < 0.0 ? IK_MouseWheelDown : IK_MouseWheelUp);
+
+		// Note: WM_MOUSEWHEEL uses screen coordinates. GetLParamPos assumes client coordinates.
+		double dpiscale = GetDpiScale();
+		POINT pos;
+		pos.x = GET_X_LPARAM(lparam);
+		pos.y = GET_Y_LPARAM(lparam);
+		ScreenToClient(WindowHandle, &pos);
+
+		WindowHost->OnWindowMouseWheel(Point(pos.x / dpiscale, pos.y / dpiscale), delta < 0.0 ? IK_MouseWheelDown : IK_MouseWheelUp);
 	}
 	else if (msg == WM_CHAR)
 	{
@@ -489,6 +528,30 @@ LRESULT Win32Window::OnWindowMessage(UINT msg, WPARAM wparam, LPARAM lparam)
 	}*/
 
 	return DefWindowProc(WindowHandle, msg, wparam, lparam);
+}
+
+void Win32Window::UpdateCursor()
+{
+	LPCWSTR cursor = IDC_ARROW;
+	switch (CurrentCursor)
+	{
+	case StandardCursor::arrow: cursor = IDC_ARROW; break;
+	case StandardCursor::appstarting: cursor = IDC_APPSTARTING; break;
+	case StandardCursor::cross: cursor = IDC_CROSS; break;
+	case StandardCursor::hand: cursor = IDC_HAND; break;
+	case StandardCursor::ibeam: cursor = IDC_IBEAM; break;
+	case StandardCursor::no: cursor = IDC_NO; break;
+	case StandardCursor::size_all: cursor = IDC_SIZEALL; break;
+	case StandardCursor::size_nesw: cursor = IDC_SIZENESW; break;
+	case StandardCursor::size_ns: cursor = IDC_SIZENS; break;
+	case StandardCursor::size_nwse: cursor = IDC_SIZENWSE; break;
+	case StandardCursor::size_we: cursor = IDC_SIZEWE; break;
+	case StandardCursor::uparrow: cursor = IDC_UPARROW; break;
+	case StandardCursor::wait: cursor = IDC_WAIT; break;
+	default: break;
+	}
+
+	::SetCursor((HCURSOR)LoadImage(0, cursor, IMAGE_CURSOR, LR_DEFAULTSIZE, LR_DEFAULTSIZE, LR_SHARED));
 }
 
 Point Win32Window::GetLParamPos(LPARAM lparam) const

@@ -194,7 +194,7 @@ public:
 	AActor *SpawnMapThing(int index, FMapThing *mt, int position);
 	AActor *SpawnPlayer(FPlayerStart *mthing, int playernum, int flags = 0);
 	void StartLightning();
-	void ForceLightning(int mode);
+	void ForceLightning(int mode, FSoundID tempSound = NO_SOUND);
 	void ClearDynamic3DFloorData();
 	void WorldDone(void);
 	void AirControlChanged();
@@ -427,6 +427,8 @@ public:
 		DThinker *thinker = static_cast<DThinker*>(cls->CreateNew());
 		assert(thinker->IsKindOf(RUNTIME_CLASS(DThinker)));
 		thinker->ObjectFlags |= OF_JustSpawned;
+		if (thinker->IsKindOf(RUNTIME_CLASS(DVisualThinker))) // [MC] This absolutely must happen for this class!
+			statnum = STAT_VISUALTHINKER;
 		Thinkers.Link(thinker, statnum);
 		thinker->Level = this;
 		return thinker;
@@ -624,6 +626,7 @@ public:
 	uint32_t		hazardcolor;			// what color strife hazard blends the screen color as
 	uint32_t		hazardflash;			// what color strife hazard flashes the screen color as
 
+	FString		LightningSound = "world/thunder";
 	FString		Music;
 	int			musicorder;
 	int			cdtrack;
@@ -637,6 +640,7 @@ public:
 	double		sky1pos, sky2pos;
 	float		hw_sky1pos, hw_sky2pos;
 	bool		skystretch;
+	uint32_t	globalcolormap;
 
 	int			total_secrets;
 	int			found_secrets;
@@ -659,7 +663,7 @@ public:
 	DSeqNode *SequenceListHead;
 
 	// [RH] particle globals
-	uint32_t			OldestParticle; // [MC] Oldest particle for replacing with PS_REPLACE
+	uint32_t			OldestParticle; // [MC] Oldest particle for replacing with SPF_REPLACE
 	uint32_t			ActiveParticles;
 	uint32_t			InactiveParticles;
 	TArray<particle_t>	Particles;

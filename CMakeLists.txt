@@ -256,7 +256,7 @@ if( MSVC )
 	# String pooling
 	# Function-level linking
 	# Disable run-time type information
-	set( ALL_C_FLAGS "/GF /Gy /permissive-" )
+	set( ALL_C_FLAGS "/GF /Gy /permissive- /utf-8" )
 
 	if ( HAVE_VULKAN )
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_VULKAN" )
@@ -301,7 +301,7 @@ else()
 
 	if ( UNIX )
 		include(CheckSymbolExists)
-		check_symbol_exists( "fts_set" "fts.h" HAVE_FTS )
+		check_symbol_exists( "fts_set" "sys/types.h;sys/stat.h;fts.h" HAVE_FTS )
 		if ( NOT HAVE_FTS )
 			include ( FindPkgConfig )
 			pkg_check_modules( MUSL_FTS musl-fts )

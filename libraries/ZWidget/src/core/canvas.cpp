@@ -5,8 +5,9 @@
 #include "core/utf8reader.h"
 #include "core/resourcedata.h"
 #include "core/image.h"
+#include "core/truetypefont.h"
+#include "core/pathfill.h"
 #include "window/window.h"
-#include "schrift/schrift.h"
 #include <vector>
 #include <unordered_map>
 #include <stdexcept>
@@ -23,8 +24,12 @@ public:
 class CanvasGlyph
 {
 public:
-	SFT_Glyph id;
-	SFT_GMetrics metrics;
+	struct
+	{
+		double leftSideBearing = 0.0;
+		double yOffset = 0.0;
+		double advanceWidth = 0.0;
+	} metrics;
 
 	double u = 0.0;
 	double v = 0.0;
@@ -36,70 +41,41 @@ public:
 class CanvasFont
 {
 public:
-	CanvasFont(const std::string& fontname, double height) : fontname(fontname), height(height)
+	CanvasFont(const std::string& fontname, double height, std::vector<uint8_t> data) : fontname(fontname), height(height)
 	{
-		data = LoadWidgetFontData(fontname);
-		loadFont(data.data(), data.size());
-
-		try
-		{
-			if (sft_lmetrics(&sft, &textmetrics) < 0)
-				throw std::runtime_error("Could not get truetype font metrics");
-		}
-		catch (...)
-		{
-			sft_freefont(sft.font);
-			throw;
-		}
+		auto tdata = std::make_shared<TrueTypeFontFileData>(std::move(data));
+		ttf = std::make_unique<TrueTypeFont>(tdata);
+		textmetrics = ttf->GetTextMetrics(height);
 	}
 
 	~CanvasFont()
 	{
-		sft_freefont(sft.font);
-		sft.font = nullptr;
 	}
 
 	CanvasGlyph* getGlyph(uint32_t utfchar)
 	{
-		auto& glyph = glyphs[utfchar];
+		uint32_t glyphIndex = ttf->GetGlyphIndex(utfchar);
+		if (glyphIndex == 0) return nullptr;
+
+		auto& glyph = glyphs[glyphIndex];
 		if (glyph)
 			return glyph.get();
 
 		glyph = std::make_unique<CanvasGlyph>();
 
-		if (sft_lookup(&sft, utfchar, &glyph->id) < 0)
-			return glyph.get();
+		TrueTypeGlyph ttfglyph = ttf->LoadGlyph(glyphIndex, height);
 
-		if (sft_gmetrics(&sft, glyph->id, &glyph->metrics) < 0)
-			return glyph.get();
-
-		glyph->metrics.advanceWidth /= 3.0;
-		glyph->metrics.leftSideBearing /= 3.0;
-
-		if (glyph->metrics.minWidth <= 0 || glyph->metrics.minHeight <= 0)
-			return glyph.get();
-
-		int w = (glyph->metrics.minWidth + 3) & ~3;
-		int h = glyph->metrics.minHeight;
-
+		// Create final subpixel version
+		int w = ttfglyph.width;
+		int h = ttfglyph.height;
 		int destwidth = (w + 2) / 3;
-
 		auto texture = std::make_shared<CanvasTexture>();
 		texture->Width = destwidth;
 		texture->Height = h;
 		texture->Data.resize(destwidth * h);
+
+		uint8_t* grayscale = ttfglyph.grayscale.get();
 		uint32_t* dest = (uint32_t*)texture->Data.data();
-
-		std::unique_ptr<uint8_t[]> grayscalebuffer(new uint8_t[w * h]);
-		uint8_t* grayscale = grayscalebuffer.get();
-
-		SFT_Image img = {};
-		img.width = w;
-		img.height = h;
-		img.pixels = grayscale;
-		if (sft_render(&sft, glyph->id, img) < 0)
-			return glyph.get();
-
 		for (int y = 0; y < h; y++)
 		{
 			uint8_t* sline = grayscale + y * w;
@@ -130,26 +106,66 @@ public:
 		glyph->uvheight = h;
 		glyph->texture = std::move(texture);
 
+		glyph->metrics.advanceWidth = (ttfglyph.advanceWidth + 2) / 3;
+		glyph->metrics.leftSideBearing = (ttfglyph.leftSideBearing + 2) / 3;
+		glyph->metrics.yOffset = ttfglyph.yOffset;
+
 		return glyph.get();
 	}
+
+	std::unique_ptr<TrueTypeFont> ttf;
 
 	std::string fontname;
 	double height = 0.0;
 
-	SFT_LMetrics textmetrics = {};
+	TrueTypeTextMetrics textmetrics;
 	std::unordered_map<uint32_t, std::unique_ptr<CanvasGlyph>> glyphs;
+};
 
-private:
-	void loadFont(const void* data, size_t size)
+class CanvasFontGroup
+{
+public:
+	struct SingleFont
 	{
-		sft.xScale = height * 3;
-		sft.yScale = height;
-		sft.flags = SFT_DOWNWARD_Y;
-		sft.font = sft_loadmem(data, size);
+		std::unique_ptr<CanvasFont> font;
+		std::string language;
+	};
+	CanvasFontGroup(const std::string& fontname, double height) : height(height)
+	{
+		auto fontdata = LoadWidgetFontData(fontname);
+		fonts.resize(fontdata.size());
+		for (size_t i = 0; i < fonts.size(); i++)
+		{
+			fonts[i].font = std::make_unique<CanvasFont>(fontname, height, fontdata[i].fontdata);
+			fonts[i].language = fontdata[i].language;
+		}
 	}
 
-	SFT sft = {};
-	std::vector<uint8_t> data;
+	CanvasGlyph* getGlyph(uint32_t utfchar, const char* lang = nullptr)
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			for (auto& fd : fonts)
+			{
+				if (i == 1 || lang == nullptr || *lang == 0 || fd.language.empty() || fd.language == lang)
+				{
+					auto g = fd.font->getGlyph(utfchar);
+					if (g) return g;
+				}
+			}
+		}
+
+		return nullptr;
+	}
+
+	TrueTypeTextMetrics& GetTextMetrics()
+	{
+		return fonts[0].font->textmetrics;
+	}
+
+	double height;
+	std::vector<SingleFont> fonts;
+
 };
 
 class BitmapCanvas : public Canvas
@@ -204,6 +220,8 @@ public:
 	int getClipMaxX() const;
 	int getClipMaxY() const;
 
+	void setLanguage(const char* lang) { language = lang; }
+
 	std::unique_ptr<CanvasTexture> createTexture(int width, int height, const void* pixels, ImageFormat format = ImageFormat::B8G8R8A8);
 
 	template<typename T>
@@ -211,7 +229,7 @@ public:
 
 	DisplayWindow* window = nullptr;
 
-	std::unique_ptr<CanvasFont> font;
+	std::unique_ptr<CanvasFontGroup> font;
 	std::unique_ptr<CanvasTexture> whiteTexture;
 
 	Point origin;
@@ -223,6 +241,7 @@ public:
 	std::vector<uint32_t> pixels;
 
 	std::unordered_map<std::shared_ptr<Image>, std::unique_ptr<CanvasTexture>> imageTextures;
+	std::string language;
 };
 
 BitmapCanvas::BitmapCanvas(DisplayWindow* window) : window(window)
@@ -230,7 +249,7 @@ BitmapCanvas::BitmapCanvas(DisplayWindow* window) : window(window)
 	uiscale = window->GetDpiScale();
 	uint32_t white = 0xffffffff;
 	whiteTexture = createTexture(1, 1, &white);
-	font = std::make_unique<CanvasFont>("Segoe UI", 13.0*uiscale);
+	font = std::make_unique<CanvasFontGroup>("NotoSans", 13.0 * uiscale);
 }
 
 BitmapCanvas::~BitmapCanvas()
@@ -390,8 +409,8 @@ void BitmapCanvas::drawText(const Point& pos, const Colorf& color, const std::st
 	UTF8Reader reader(text.data(), text.size());
 	while (!reader.is_end())
 	{
-		CanvasGlyph* glyph = font->getGlyph(reader.character());
-		if (!glyph->texture)
+		CanvasGlyph* glyph = font->getGlyph(reader.character(), language.c_str());
+		if (!glyph || !glyph->texture)
 		{
 			glyph = font->getGlyph(32);
 		}
@@ -411,13 +430,13 @@ void BitmapCanvas::drawText(const Point& pos, const Colorf& color, const std::st
 Rect BitmapCanvas::measureText(const std::string& text)
 {
 	double x = 0.0;
-	double y = font->textmetrics.ascender - font->textmetrics.descender;
+	double y = font->GetTextMetrics().ascender - font->GetTextMetrics().descender;
 
 	UTF8Reader reader(text.data(), text.size());
 	while (!reader.is_end())
 	{
-		CanvasGlyph* glyph = font->getGlyph(reader.character());
-		if (!glyph->texture)
+		CanvasGlyph* glyph = font->getGlyph(reader.character(), language.c_str());
+		if (!glyph || !glyph->texture)
 		{
 			glyph = font->getGlyph(32);
 		}
@@ -433,8 +452,9 @@ VerticalTextPosition BitmapCanvas::verticalTextAlign()
 {
 	VerticalTextPosition align;
 	align.top = 0.0f;
-	align.baseline = font->textmetrics.ascender / uiscale;
-	align.bottom = (font->textmetrics.ascender - font->textmetrics.descender) / uiscale;
+	auto tm = font->GetTextMetrics();
+	align.baseline = tm.ascender / uiscale;
+	align.bottom = (tm.ascender - tm.descender) / uiscale;
 	return align;
 }
 

@@ -1,5 +1,4 @@
 /*
-/*
 ** serializer.cpp
 ** Savegame wrapper around RapidJSON
 **
@@ -57,6 +56,7 @@
 #include "texturemanager.h"
 #include "base64.h"
 #include "vm.h"
+#include "i_interface.h"
 
 using namespace FileSys;
 
@@ -753,7 +753,6 @@ FCompressedBuffer FSerializer::GetCompressedOutput()
 	EndObject();
 	buff.filename = nullptr;
 	buff.mSize = (unsigned)w->mOutString.GetSize();
-	buff.mZipFlags = 0;
 	buff.mCRC32 = crc32(0, (const Bytef*)w->mOutString.GetString(), buff.mSize);
 
 	uint8_t *compressbuf = new uint8_t[buff.mSize+1];
@@ -762,9 +761,9 @@ FCompressedBuffer FSerializer::GetCompressedOutput()
 	int err;
 
 	stream.next_in = (Bytef *)w->mOutString.GetString();
-	stream.avail_in = buff.mSize;
+	stream.avail_in = (unsigned)buff.mSize;
 	stream.next_out = (Bytef*)compressbuf;
-	stream.avail_out = buff.mSize;
+	stream.avail_out = (unsigned)buff.mSize;
 	stream.zalloc = (alloc_func)0;
 	stream.zfree = (free_func)0;
 	stream.opaque = (voidpf)0;
@@ -1194,6 +1193,28 @@ FSerializer &Serialize(FSerializer &arc, const char *key, FTextureID &value, FTe
 			}
 		}
 	}
+	return arc;
+}
+
+//==========================================================================
+//
+//
+//
+//==========================================================================
+
+FSerializer& Serialize(FSerializer& arc, const char* key, FTranslationID& value, FTranslationID* defval)
+{
+	int v = value.index();
+	int* defv = (int*)defval;
+	Serialize(arc, key, v, defv);
+	
+	if (arc.isReading())
+	{
+		// allow games to alter the loaded value to handle dynamic lists.
+		if (sysCallbacks.RemapTranslation) value = sysCallbacks.RemapTranslation(FTranslationID::fromInt(v));
+		else value = FTranslationID::fromInt(v);
+	}
+		
 	return arc;
 }
 
@@ -1733,6 +1754,19 @@ void SerializeFunctionPointer(FSerializer &arc, const char *key, FunctionPointer
 			p = nullptr;
 		}
 	}
+}
+
+bool FSerializer::ReadOptionalInt(const char * key, int &into)
+{
+	if(!isReading()) return false;
+
+	auto val = r->FindKey(key);
+	if(val && val->IsInt())
+	{
+		into = val->GetInt();
+		return true;
+	}
+	return false;
 }
 
 #include "renderstyle.h"

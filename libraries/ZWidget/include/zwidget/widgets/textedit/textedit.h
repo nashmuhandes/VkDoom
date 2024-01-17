@@ -56,9 +56,9 @@ protected:
 	void OnPaintFrame(Canvas* canvas) override;
 	void OnPaint(Canvas* canvas) override;
 	void OnMouseMove(const Point& pos) override;
-	void OnMouseDown(const Point& pos, int key) override;
-	void OnMouseDoubleclick(const Point& pos, int key) override;
-	void OnMouseUp(const Point& pos, int key) override;
+	bool OnMouseDown(const Point& pos, int key) override;
+	bool OnMouseDoubleclick(const Point& pos, int key) override;
+	bool OnMouseUp(const Point& pos, int key) override;
 	void OnKeyChar(std::string chars) override;
 	void OnKeyDown(EInputKey key) override;
 	void OnKeyUp(EInputKey key) override;
@@ -149,7 +149,7 @@ private:
 
 	bool select_all_on_focus_gain = false;
 
-	std::shared_ptr<Font> font = Font::Create("Segoe UI", 12.0);
+	std::shared_ptr<Font> font = Font::Create("NotoSans", 12.0);
 
 	template<typename T>
 	static T clamp(T val, T minval, T maxval) { return std::max<T>(std::min<T>(val, maxval), minval); }

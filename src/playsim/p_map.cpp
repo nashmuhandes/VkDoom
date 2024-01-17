@@ -170,6 +170,25 @@ bool P_CanCollideWith(AActor *tmthing, AActor *thing)
 	return true;
 }
 
+void P_CollidedWith(AActor* const collider, AActor* const collidee)
+{
+	{
+		IFVIRTUALPTR(collider, AActor, CollidedWith)
+		{
+			VMValue params[] = { collider, collidee, false };
+			VMCall(func, params, 3, nullptr, 0);
+		}
+	}
+
+	{
+		IFVIRTUALPTR(collidee, AActor, CollidedWith)
+		{
+			VMValue params[] = { collidee, collider, true };
+			VMCall(func, params, 3, nullptr, 0);
+		}
+	}
+}
+
 //==========================================================================
 // 
 // CanCrossLine
@@ -2046,8 +2065,15 @@ AActor *P_CheckOnmobj(AActor *thing)
 	oldz = thing->Z();
 	P_FakeZMovement(thing);
 	good = P_TestMobjZ(thing, false, &onmobj);
-	thing->SetZ(oldz);
 
+	// Make sure we don't double call a collision with it.
+	if (!good && onmobj != nullptr && onmobj != thing->BlockingMobj
+		&& (thing->player == nullptr || !(thing->player->cheats & CF_PREDICTING)))
+	{
+		P_CollidedWith(thing, onmobj);
+	}
+
+	thing->SetZ(oldz);
 	return good ? NULL : onmobj;
 }
 
@@ -2289,6 +2315,11 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 	if (!P_CheckPosition(thing, pos, tm))
 	{
 		AActor *BlockingMobj = thing->BlockingMobj;
+		// This gets called regardless of whether or not the following checks allow the thing to pass. This is because a player
+		// could step on top of an enemy but we still want it to register as a collision.
+		if (BlockingMobj != nullptr && (thing->player == nullptr || !(thing->player->cheats & CF_PREDICTING)))
+			P_CollidedWith(thing, BlockingMobj);
+
 		// Solid wall or thing
 		if (!BlockingMobj || BlockingMobj->player || !thing->player)
 		{
@@ -2567,6 +2598,9 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 				thing->SetXYZ(thingpos.X, thingpos.Y, pos.Z);
 				if (!P_CheckPosition(thing, pos.XY(), true))	// check if some actor blocks us on the other side. (No line checks, because of the mess that'd create.)
 				{
+					if (thing->BlockingMobj != nullptr && (thing->player == nullptr || !(thing->player->cheats && CF_PREDICTING)))
+						P_CollidedWith(thing, thing->BlockingMobj);
+
 					thing->SetXYZ(oldthingpos);
 					thing->flags6 &= ~MF6_INTRYMOVE;
 					return false;
@@ -2602,13 +2636,15 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 					auto p = thing->Level->GetConsolePlayer();
 					if (p) p->viewz += hit.pos.Z;	// needs to be done here because otherwise the renderer will not catch the change.
 					P_TranslatePortalAngle(ld, hit.angle);
+					if (thing->player && (port->mType == PORTT_INTERACTIVE || port->mType == PORTT_TELEPORT))
+						thing->player->crossingPortal = true;
 				}
 				R_AddInterpolationPoint(hit);
 			}
 			if (port->mType == PORTT_LINKED)
 			{
 				continue;
-		}
+			}
 		}
 		break;
 	}
@@ -2744,6 +2780,7 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 
 pushline:
 	thing->flags6 &= ~MF6_INTRYMOVE;
+	thing->SetZ(oldz);
 
 	// [RH] Don't activate anything if just predicting
 	if (thing->player && (thing->player->cheats & CF_PREDICTING))
@@ -2751,7 +2788,6 @@ pushline:
 		return false;
 	}
 
-	thing->SetZ(oldz);
 	if (!(thing->flags&(MF_TELEPORT | MF_NOCLIP)))
 	{
 		int numSpecHitTemp;
@@ -5163,7 +5199,7 @@ void P_TraceBleed(int damage, const DVector3 &pos, AActor *actor, DAngle angle, 
 					bloodcolor.a = 1;
 				}
 
-				uint32_t bloodTrans = (bloodcolor != 0 ? actor->BloodTranslation : 0);
+				auto bloodTrans = (bloodcolor != 0 ? actor->BloodTranslation : NO_TRANSLATION);
 
 				DImpactDecal::StaticCreate(actor->Level, bloodType, bleedtrace.HitPos,
 					bleedtrace.Line->sidedef[bleedtrace.Side], bleedtrace.ffloor, bloodcolor, bloodTrans);
@@ -5566,24 +5602,47 @@ void P_AimCamera(AActor *t1, DVector3 &campos, DAngle &camangle, sector_t *&Came
 	camangle = trace.SrcAngleFromTarget - DAngle::fromDeg(180.);
 }
 
+struct ViewPosPortal
+{
+	int counter;
+};
+
+static ETraceStatus VPos_CheckPortal(FTraceResults &res, void *userdata)
+{
+	//[MC] Mirror how third person works.
+	ViewPosPortal *pc = (ViewPosPortal *)userdata;
+
+	if (res.HitType == TRACE_CrossingPortal)
+	{
+		res.HitType = TRACE_HitNone; // Needed to force the trace to continue appropriately.
+		pc->counter++;
+		return TRACE_Skip;
+	}
+	if (res.HitType == TRACE_HitActor)
+	{
+		return TRACE_Skip;
+	}
+	return TRACE_Stop;
+}
+
 // [MC] Used for ViewPos. Uses code borrowed from P_AimCamera.
-void P_AdjustViewPos(AActor *t1, DVector3 orig, DVector3 &campos, sector_t *&CameraSector, bool &unlinked, DViewPosition *VP)
+void P_AdjustViewPos(AActor *t1, DVector3 orig, DVector3 &campos, sector_t *&CameraSector, bool &unlinked, DViewPosition *VP, FRenderViewpoint *view)
 {
 	FTraceResults trace;
+	ViewPosPortal pc;
+	pc.counter = 0;
 	const DVector3 vvec = campos - orig;
 	const double distance = vvec.Length();
 
 	// Trace handles all of the portal crossing, which is why there is no usage of Vec#Offset(Z).
-	if (Trace(orig, t1->Sector, vvec.Unit(), distance, 0, 0, t1, trace) &&
+	if (Trace(orig, CameraSector, vvec.Unit(), distance, 0, 0, t1, trace, TRACE_ReportPortals, VPos_CheckPortal, &pc) && 
 		trace.Distance > 5)
-	{
-		// Position camera slightly in front of hit thing
 		campos = orig + vvec.Unit() * (trace.Distance - 5);
-	}
 	else
-	{
 		campos = trace.HitPos - trace.HitVector * 1 / 256.;
-	}
+	
+
+	if (pc.counter > 2) view->noviewer = true;
 	CameraSector = trace.Sector;
 	unlinked = trace.unlinked;
 }
@@ -6481,7 +6540,7 @@ void P_DoCrunch(AActor *thing, FChangePosition *cpos)
 
 					mo->Vel.X = pr_crunch.Random2() / 16.;
 					mo->Vel.Y = pr_crunch.Random2() / 16.;
-					if (thing->BloodTranslation != 0 && !(mo->flags2 & MF2_DONTTRANSLATE))
+					if (thing->BloodTranslation != NO_TRANSLATION && !(mo->flags2 & MF2_DONTTRANSLATE))
 					{
 						mo->Translation = thing->BloodTranslation;
 					}
@@ -6652,12 +6711,6 @@ int P_PushDown(AActor *thing, FChangePosition *cpos)
 
 void PIT_FloorDrop(AActor *thing, FChangePosition *cpos)
 {
-	if ((thing->Level->i_compatflags2 & COMPATF2_FLOORMOVE) && (thing->Top() > thing->ceilingz))
-	{
-		cpos->nofit = true;
-		return;
-	}
-
 	double oldfloorz = thing->floorz;
 	double oldz = thing->Z();
 
@@ -7033,6 +7086,7 @@ bool P_ChangeSector(sector_t *sector, int crunch, double amt, int floorOrCeil, b
 		}
 
 	}
+
 	return cpos.nofit;
 }
 

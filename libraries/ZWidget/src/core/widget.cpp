@@ -172,6 +172,11 @@ void Widget::Show()
 	{
 		DispWindow->Show();
 	}
+	else if (HiddenFlag)
+	{
+		HiddenFlag = false;
+		Update();
+	}
 }
 
 void Widget::ShowFullscreen()
@@ -212,6 +217,11 @@ void Widget::Hide()
 	{
 		if (DispWindow)
 			DispWindow->Hide();
+	}
+	else if (!HiddenFlag)
+	{
+		HiddenFlag = true;
+		Update();
 	}
 }
 
@@ -299,7 +309,7 @@ void Widget::Paint(Canvas* canvas)
 	OnPaint(canvas);
 	for (Widget* w = FirstChild(); w != nullptr; w = w->NextSibling())
 	{
-		if (w->Type == WidgetType::Child)
+		if (w->Type == WidgetType::Child && !w->HiddenFlag)
 			w->Paint(canvas);
 	}
 	canvas->setOrigin(oldOrigin);
@@ -323,9 +333,21 @@ bool Widget::IsEnabled()
 	return true;
 }
 
+bool Widget::IsHidden()
+{
+	return !IsVisible();
+}
+
 bool Widget::IsVisible()
 {
-	return true;
+	if (Type != WidgetType::Child)
+	{
+		return true; // DispWindow->IsVisible();
+	}
+	else
+	{
+		return !HiddenFlag;
+	}
 }
 
 void Widget::SetFocus()
@@ -367,14 +389,38 @@ void Widget::UnlockCursor()
 
 void Widget::SetCursor(StandardCursor cursor)
 {
+	if (CurrentCursor != cursor)
+	{
+		CurrentCursor = cursor;
+		if (HoverWidget == this || CaptureWidget == this)
+		{
+			Widget* w = Window();
+			if (w)
+			{
+				w->DispWindow->SetCursor(CurrentCursor);
+			}
+		}
+	}
 }
 
 void Widget::CaptureMouse()
 {
+	Widget* w = Window();
+	if (w && w->CaptureWidget != this)
+	{
+		w->CaptureWidget = this;
+		w->DispWindow->CaptureMouse();
+	}
 }
 
 void Widget::ReleaseMouseCapture()
 {
+	Widget* w = Window();
+	if (w && w->CaptureWidget != nullptr)
+	{
+		w->CaptureWidget = nullptr;
+		w->DispWindow->ReleaseMouseCapture();
+	}
 }
 
 std::string Widget::GetClipboardText()
@@ -403,9 +449,9 @@ Widget* Widget::Window()
 	return nullptr;
 }
 
-Canvas* Widget::GetCanvas()
+Canvas* Widget::GetCanvas() const
 {
-	for (Widget* w = this; w != nullptr; w = w->Parent())
+	for (const Widget* w = this; w != nullptr; w = w->Parent())
 	{
 		if (w->DispCanvas)
 			return w->DispCanvas.get();
@@ -417,9 +463,9 @@ Widget* Widget::ChildAt(const Point& pos)
 {
 	for (Widget* cur = LastChild(); cur != nullptr; cur = cur->PrevSibling())
 	{
-		if (cur->FrameGeometry.contains(pos))
+		if (!cur->HiddenFlag && cur->FrameGeometry.contains(pos))
 		{
-			Widget* cur2 = cur->ChildAt(pos - cur->FrameGeometry.topLeft());
+			Widget* cur2 = cur->ChildAt(pos - cur->ContentGeometry.topLeft());
 			return cur2 ? cur2 : cur;
 		}
 	}
@@ -487,6 +533,7 @@ void Widget::OnWindowMouseMove(const Point& pos)
 {
 	if (CaptureWidget)
 	{
+		DispWindow->SetCursor(CaptureWidget->CurrentCursor);
 		CaptureWidget->OnMouseMove(CaptureWidget->MapFrom(this, pos));
 	}
 	else
@@ -498,11 +545,26 @@ void Widget::OnWindowMouseMove(const Point& pos)
 		if (HoverWidget != widget)
 		{
 			if (HoverWidget)
-				HoverWidget->OnMouseLeave();
+			{
+				for (Widget* w = HoverWidget; w != widget && w != this; w = w->Parent())
+				{
+					Widget* p = w->Parent();
+					if (!w->FrameGeometry.contains(p->MapFrom(this, pos)))
+					{
+						w->OnMouseLeave();
+					}
+				}
+			}
 			HoverWidget = widget;
 		}
 
-		widget->OnMouseMove(widget->MapFrom(this, pos));
+		DispWindow->SetCursor(widget->CurrentCursor);
+
+		do
+		{
+			widget->OnMouseMove(widget->MapFrom(this, pos));
+			widget = widget->Parent();
+		} while (widget != this);
 	}
 }
 
@@ -517,7 +579,13 @@ void Widget::OnWindowMouseDown(const Point& pos, EInputKey key)
 		Widget* widget = ChildAt(pos);
 		if (!widget)
 			widget = this;
-		widget->OnMouseDown(widget->MapFrom(this, pos), key);
+		while (widget)
+		{
+			bool stopPropagation = widget->OnMouseDown(widget->MapFrom(this, pos), key);
+			if (stopPropagation || widget == this)
+				break;
+			widget = widget->Parent();
+		}
 	}
 }
 
@@ -532,7 +600,13 @@ void Widget::OnWindowMouseDoubleclick(const Point& pos, EInputKey key)
 		Widget* widget = ChildAt(pos);
 		if (!widget)
 			widget = this;
-		widget->OnMouseDoubleclick(widget->MapFrom(this, pos), key);
+		while (widget)
+		{
+			bool stopPropagation = widget->OnMouseDoubleclick(widget->MapFrom(this, pos), key);
+			if (stopPropagation || widget == this)
+				break;
+			widget = widget->Parent();
+		}
 	}
 }
 
@@ -547,7 +621,13 @@ void Widget::OnWindowMouseUp(const Point& pos, EInputKey key)
 		Widget* widget = ChildAt(pos);
 		if (!widget)
 			widget = this;
-		widget->OnMouseUp(widget->MapFrom(this, pos), key);
+		while (widget)
+		{
+			bool stopPropagation = widget->OnMouseUp(widget->MapFrom(this, pos), key);
+			if (stopPropagation || widget == this)
+				break;
+			widget = widget->Parent();
+		}
 	}
 }
 
@@ -562,7 +642,13 @@ void Widget::OnWindowMouseWheel(const Point& pos, EInputKey key)
 		Widget* widget = ChildAt(pos);
 		if (!widget)
 			widget = this;
-		widget->OnMouseWheel(widget->MapFrom(this, pos), key);
+		while (widget)
+		{
+			bool stopPropagation = widget->OnMouseWheel(widget->MapFrom(this, pos), key);
+			if (stopPropagation || widget == this)
+				break;
+			widget = widget->Parent();
+		}
 	}
 }
 

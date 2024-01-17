@@ -57,7 +57,7 @@ public:
 		sft.xScale = height;
 		sft.yScale = height;
 		sft.flags = SFT_DOWNWARD_Y;
-		sft.font = sft_loadmem(lumpdata.GetBytes(), lumpdata.GetSize());
+		sft.font = sft_loadmem(lumpdata.data(), lumpdata.size());
 		if (!sft.font)
 			I_FatalError("Could not load truetype font file");
 
@@ -127,8 +127,8 @@ public:
 		Translations.Resize(NumTextColors);
 		for (int i = 0; i < NumTextColors; i++)
 		{
-			if (i == CR_UNTRANSLATED) Translations[i] = 0;
-			else Translations[i] = LuminosityTranslation(i * 2, minlum, maxlum);
+			if (i == CR_UNTRANSLATED) Translations[i] = NO_TRANSLATION;
+			else Translations[i] = MakeLuminosityTranslation(i * 2, minlum, maxlum);
 		}
 	}
 

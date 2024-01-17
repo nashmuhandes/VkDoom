@@ -81,7 +81,7 @@ class DoomSoundEngine : public SoundEngine
 
 	void CalcPosVel(int type, const void* source, const float pt[3], int channum, int chanflags, FSoundID soundid, FVector3* pos, FVector3* vel, FSoundChan *) override;
 	bool ValidatePosVel(int sourcetype, const void* source, const FVector3& pos, const FVector3& vel);
-	std::vector<uint8_t> ReadSound(int lumpnum);
+	TArray<uint8_t> ReadSound(int lumpnum);
 	FSoundID PickReplacement(FSoundID refid);
 	FSoundID ResolveSound(const void *ent, int type, FSoundID soundid, float &attenuation) override;
 	void CacheSound(sfxinfo_t* sfx) override;
@@ -177,36 +177,17 @@ static FString LookupMusic(const char* musicname, int& order)
 
 //==========================================================================
 //
-// OpenMusic
+// FindMusic
 //
-// opens a FileReader for the music - used as a callback to keep
-// implementation details out of the core player.
+// loops up a music resource according to the engine's rules
 //
 //==========================================================================
 
-static FileReader OpenMusic(const char* musicname)
+static int FindMusic(const char* musicname)
 {
-	FileReader reader;
-	if (!FileExists(musicname))
-	{
-		int lumpnum;
-		lumpnum = fileSystem.CheckNumForFullName(musicname);
-		if (lumpnum == -1) lumpnum = fileSystem.CheckNumForName(musicname, FileSys::ns_music);
-		if (lumpnum == -1)
-		{
-			Printf("Music \"%s\" not found\n", musicname);
-		}
-		else if (fileSystem.FileLength(lumpnum) != 0)
-		{
-			reader = fileSystem.ReopenFileReader(lumpnum);
-		}
-	}
-	else
-	{
-		// Load an external file.
-		reader.OpenFile(musicname);
-	}
-	return reader;
+	int lumpnum = fileSystem.CheckNumForFullName(musicname);
+	if (lumpnum == -1) lumpnum = fileSystem.CheckNumForName(musicname, FileSys::ns_music);
+	return lumpnum;
 }
 
 //==========================================================================
@@ -220,7 +201,7 @@ static FileReader OpenMusic(const char* musicname)
 void S_Init()
 {
 	// Hook up the music player with the engine specific customizations.
-	static MusicCallbacks cb = { LookupMusic, OpenMusic };
+	static MusicCallbacks cb = { LookupMusic, FindMusic };
 	S_SetMusicCallbacks(&cb);
 
 	// Must be up before I_InitSound.
@@ -1166,10 +1147,13 @@ bool DoomSoundEngine::ValidatePosVel(int sourcetype, const void* source, const F
 // 
 //==========================================================================
 
-std::vector<uint8_t> DoomSoundEngine::ReadSound(int lumpnum)
+TArray<uint8_t> DoomSoundEngine::ReadSound(int lumpnum)
 {
 	auto wlump = fileSystem.OpenFileReader(lumpnum);
-	return wlump.Read();
+	TArray<uint8_t> buffer(wlump.GetLength(), true);
+	auto len = wlump.Read(buffer.data(), buffer.size());
+	buffer.Resize(len);
+	return buffer;
 }
 
 //==========================================================================

@@ -8,10 +8,13 @@
 #include "hw_levelmeshlight.h"
 #include "hw_levelmeshportal.h"
 #include "hw_lightmaptile.h"
-#include "hw_levemeshsurface.h"
+#include "hw_levelmeshsurface.h"
 #include "hw_materialstate.h"
 #include "hw_surfaceuniforms.h"
 #include <memory>
+
+#include <dp_rect_pack.h>
+typedef dp::rect_pack::RectPacker<int> RectPacker;
 
 struct LevelMeshTileStats;
 
@@ -61,9 +64,8 @@ public:
 	void UpdateCollision();
 	void GatherTilePixelStats(LevelMeshTileStats& stats);
 	void BuildTileSurfaceLists();
-
-private:
-	FVector2 ToUV(const FVector3& vert, const LightmapTile* tile);
+	void SetupTileTransforms();
+	void PackLightmapAtlas(int lightmapStartIndex);
 };
 
 class LevelMesh
