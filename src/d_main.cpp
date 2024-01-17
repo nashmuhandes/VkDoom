@@ -954,6 +954,8 @@ void RenderGraph(const GraphBuffer& buffer, DVector2 pos, DVector2 size, float y
 	}
 }
 
+CVAR(Bool, mad_graph, false, CVAR_NOSAVE);
+
 //==========================================================================
 //
 // D_Display
@@ -1084,8 +1086,11 @@ void D_Display ()
 		{
 			viewsec = RenderView(&players[consoleplayer]);
 
-			renderTimeGraph.Push(All.TimeMS() + Finish.TimeMS());
-			RenderGraph(renderTimeGraph, DVector2(screen->GetWidth() * 0.25, screen->GetHeight() * 0.25), DVector2(screen->GetWidth() * 0.5, screen->GetHeight() * 0.5), 20.0f, MAKEARGB(255, 255, 255, 0), 255, "%.1lfms");
+			if (*mad_graph)
+			{
+				renderTimeGraph.Push(All.TimeMS() + Finish.TimeMS());
+				RenderGraph(renderTimeGraph, DVector2(screen->GetWidth() * 0.25, screen->GetHeight() * 0.25), DVector2(screen->GetWidth() * 0.5, screen->GetHeight() * 0.5), 20.0f, MAKEARGB(255, 255, 255, 0), 255, "%.1lfms");
+			}
 
 		}, true);
 
