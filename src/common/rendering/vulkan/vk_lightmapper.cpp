@@ -9,10 +9,6 @@
 #include "filesystem.h"
 #include "cmdlib.h"
 
-#define USE_DRAWINDIRECT
-
-extern bool vk_rayquery;
-
 static int lastSurfaceCount;
 static glcycle_t lightmapRaytraceLast;
 
@@ -35,7 +31,7 @@ CVAR(Bool, lm_blur, true, 0);
 
 VkLightmapper::VkLightmapper(VulkanRenderDevice* fb) : fb(fb)
 {
-	useRayQuery = vk_rayquery && fb->GetDevice()->SupportsExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME) && fb->GetDevice()->PhysicalDevice.Features.RayQuery.rayQuery;
+	useRayQuery = fb->IsRayQueryEnabled();
 
 	templightlist.Resize(128);
 
@@ -182,10 +178,6 @@ void VkLightmapper::Render()
 	viewport.height = (float)bakeImageSize;
 	cmdbuffer->setViewport(0, 1, &viewport);
 
-	int dynamicSurfaceIndexOffset = mesh->StaticMesh->GetSurfaceCount();
-	int dynamicFirstIndexOffset = mesh->StaticMesh->Mesh.Indexes.Size();
-	LevelSubmesh* staticMesh = mesh->StaticMesh.get();
-
 	for (int i = 0, count = selectedTiles.Size(); i < count; i++)
 	{
 		auto& selectedTile = selectedTiles[i];
@@ -204,17 +196,10 @@ void VkLightmapper::Render()
 		bool buffersFull = false;
 
 		// Paint all surfaces visible in the tile
-		for (LevelMeshSurface* surface : targetTile->Surfaces)
+		for (int surfaceIndex : targetTile->Surfaces)
 		{
-			int surfaceIndexOffset = 0;
-			int firstIndexOffset = 0;
-			if (surface->Submesh != staticMesh)
-			{
-				surfaceIndexOffset = dynamicSurfaceIndexOffset;
-				firstIndexOffset = dynamicFirstIndexOffset;
-			}
-
-			pc.SurfaceIndex = surfaceIndexOffset + surface->Submesh->GetSurfaceIndex(surface);
+			LevelMeshSurface* surface = mesh->GetSurface(surfaceIndex);
+			pc.SurfaceIndex = surfaceIndex;
 
 			if (surface->LightList.ResetCounter != lights.ResetCounter)
 			{
@@ -252,11 +237,10 @@ void VkLightmapper::Render()
 			pc.LightStart = surface->LightList.Pos;
 			pc.LightEnd = pc.LightStart + surface->LightList.Count;
 
-#ifdef USE_DRAWINDIRECT
 			VkDrawIndexedIndirectCommand cmd;
 			cmd.indexCount = surface->MeshLocation.NumElements;
 			cmd.instanceCount = 1;
-			cmd.firstIndex = firstIndexOffset + surface->MeshLocation.StartElementIndex;
+			cmd.firstIndex = surface->MeshLocation.StartElementIndex;
 			cmd.vertexOffset = 0;
 			cmd.firstInstance = drawindexed.Pos;
 			drawindexed.Constants[drawindexed.Pos] = pc;
@@ -269,10 +253,6 @@ void VkLightmapper::Render()
 				buffersFull = true;
 				break;
 			}
-#else
-			cmdbuffer->pushConstants(raytrace.pipelineLayout.get(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LightmapRaytracePC), &pc);
-			cmdbuffer->drawIndexed(surface->numElements, 1, surface->startElementIndex, 0, 0);
-#endif
 		}
 
 		if (buffersFull)
@@ -288,9 +268,7 @@ void VkLightmapper::Render()
 		selectedTile.Rendered = true;
 	}
 
-#ifdef USE_DRAWINDIRECT
 	cmdbuffer->drawIndexedIndirect(drawindexed.CommandsBuffer->buffer, 0, drawindexed.Pos, sizeof(VkDrawIndexedIndirectCommand));
-#endif
 
 	cmdbuffer->endRenderPass();
 
@@ -555,10 +533,6 @@ void VkLightmapper::CreateShaders()
 		traceprefix += "#extension GL_EXT_ray_query : require\r\n";
 		traceprefix += "#define USE_RAYQUERY\r\n";
 	}
-#ifdef USE_DRAWINDIRECT
-	prefix += "#define USE_DRAWINDIRECT\r\n";
-	traceprefix += "#define USE_DRAWINDIRECT\r\n";
-#endif
 
 	auto onIncludeLocal = [](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); };
 	auto onIncludeSystem = [](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); };
@@ -706,9 +680,7 @@ void VkLightmapper::CreateRaytracePipeline()
 		.AddBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
 		.AddBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-#ifdef USE_DRAWINDIRECT
 		.AddBinding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-#endif
 		.DebugName("raytrace.descriptorSetLayout0")
 		.Create(fb->GetDevice());
 
@@ -735,9 +707,6 @@ void VkLightmapper::CreateRaytracePipeline()
 		.AddSetLayout(raytrace.descriptorSetLayout0.get())
 		.AddSetLayout(raytrace.descriptorSetLayout1.get())
 		.AddSetLayout(fb->GetDescriptorSetManager()->GetBindlessLayout())
-#ifndef USE_DRAWINDIRECT
-		.AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LightmapRaytracePC))
-#endif
 		.DebugName("raytrace.pipelineLayout")
 		.Create(fb->GetDevice());
 
@@ -834,9 +803,7 @@ void VkLightmapper::UpdateAccelStructDescriptors()
 		.AddBuffer(raytrace.descriptorSet0.get(), 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, fb->GetLevelMesh()->GetSurfaceBuffer())
 		.AddBuffer(raytrace.descriptorSet0.get(), 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, lights.Buffer.get())
 		.AddBuffer(raytrace.descriptorSet0.get(), 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, fb->GetLevelMesh()->GetPortalBuffer())
-#ifdef USE_DRAWINDIRECT
 		.AddBuffer(raytrace.descriptorSet0.get(), 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, drawindexed.ConstantsBuffer.get(), 0, drawindexed.BufferSize * sizeof(LightmapRaytracePC))
-#endif
 		.Execute(fb->GetDevice());
 }
 

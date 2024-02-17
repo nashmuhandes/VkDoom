@@ -138,8 +138,7 @@ void VulkanPrintLog(const char* typestr, const std::string& msg)
 VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface) : SystemBaseFrameBuffer(hMonitor, fullscreen)
 {
 	VulkanDeviceBuilder builder;
-	if (vk_rayquery)
-		builder.OptionalRayQuery();
+	builder.OptionalRayQuery();
 	builder.RequireExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 	builder.Surface(surface);
 	builder.SelectDevice(vk_device);
@@ -154,6 +153,8 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 	{
 		I_FatalError("This GPU does not support the minimum requirements of this application");
 	}
+
+	mUseRayQuery = vk_rayquery && mDevice->SupportsExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME) && mDevice->PhysicalDevice.Features.RayQuery.rayQuery;
 }
 
 VulkanRenderDevice::~VulkanRenderDevice()
@@ -195,7 +196,7 @@ void VulkanRenderDevice::InitializeState()
 	}
 
 	uniformblockalignment = (unsigned int)mDevice->PhysicalDevice.Properties.Properties.limits.minUniformBufferOffsetAlignment;
-	maxuniformblock = mDevice->PhysicalDevice.Properties.Properties.limits.maxUniformBufferRange;
+	maxuniformblock = std::min(mDevice->PhysicalDevice.Properties.Properties.limits.maxUniformBufferRange, (uint32_t)1024 * 1024);
 
 	mCommands.reset(new VkCommandBufferManager(this));
 
@@ -482,9 +483,9 @@ void VulkanRenderDevice::BeginFrame()
 		levelMeshChanged = false;
 		mLevelMesh->SetLevelMesh(levelMesh);
 
-		if (levelMesh && levelMesh->StaticMesh->LMTextureCount > 0)
+		if (levelMesh && levelMesh->LMTextureCount > 0)
 		{
-			GetTextureManager()->CreateLightmap(levelMesh->StaticMesh->LMTextureSize, levelMesh->StaticMesh->LMTextureCount, std::move(levelMesh->StaticMesh->LMTextureData));
+			GetTextureManager()->CreateLightmap(levelMesh->LMTextureSize, levelMesh->LMTextureCount, std::move(levelMesh->LMTextureData));
 			GetLightmapper()->SetLevelMesh(levelMesh);
 		}
 	}
@@ -632,8 +633,6 @@ int VulkanRenderDevice::GetLevelMeshPipelineID(const MeshApplyData& applyData, c
 	pipelineKey.VertexFormat = levelVertexFormatIndex;
 	pipelineKey.RenderStyle = applyData.RenderStyle;
 	pipelineKey.DepthFunc = applyData.DepthFunc;
-	pipelineKey.NumTextureLayers = material.mMaterial ? material.mMaterial->NumLayers() : 0;
-	pipelineKey.NumTextureLayers = max(pipelineKey.NumTextureLayers, SHADER_MIN_REQUIRED_TEXTURE_LAYERS);// Always force minimum 8 textures as the shader requires it
 	if (applyData.SpecialEffect > EFF_NONE)
 	{
 		pipelineKey.ShaderKey.SpecialEffect = applyData.SpecialEffect;

@@ -383,6 +383,7 @@ public:
 	PalEntry ThingColor;	// thing's own color
 	FColormap Colormap;
 	FSpriteModelFrame * modelframe;
+	int modelframeflags;
 	FRenderStyle RenderStyle;
 	int OverrideShader;
 
@@ -433,7 +434,6 @@ struct DecalVertex
 {
 	float x, y, z;
 	float u, v;
-	float lu, lv, lindex;
 };
 
 struct HWDecal
