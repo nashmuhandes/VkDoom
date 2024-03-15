@@ -694,7 +694,7 @@ bool player_t::Resurrect()
 		P_BringUpWeapon(this);
 	}
 
-	if (morphTics)
+	if (mo->alternative != nullptr)
 	{
 		P_UnmorphActor(mo, mo);
 	}
@@ -1173,7 +1173,7 @@ void P_CheckEnvironment(player_t *player)
 		P_PlayerOnSpecialFlat(player, P_GetThingFloorType(player->mo));
 	}
 	if (player->mo->Vel.Z <= -player->mo->FloatVar(NAME_FallingScreamMinSpeed) &&
-		player->mo->Vel.Z >= -player->mo->FloatVar(NAME_FallingScreamMaxSpeed) && !player->morphTics &&
+		player->mo->Vel.Z >= -player->mo->FloatVar(NAME_FallingScreamMaxSpeed) && player->mo->alternative == nullptr &&
 		player->mo->waterlevel == 0)
 	{
 		auto id = S_FindSkinnedSound(player->mo, S_FindSound("*falling"));
@@ -1238,6 +1238,17 @@ void P_PlayerThink (player_t *player)
 	if (player->mo == NULL)
 	{
 		I_Error ("No player %td start\n", player - players + 1);
+	}
+
+	for (unsigned int i = 0u; i < 3u; ++i)
+	{
+		if (fabs(player->angleOffsetTargets[i].Degrees()) >= EQUAL_EPSILON)
+		{
+			player->mo->Angles[i] += player->angleOffsetTargets[i];
+			player->mo->PrevAngles[i] = player->mo->Angles[i];
+		}
+
+		player->angleOffsetTargets[i] = nullAngle;
 	}
 
 	if (player->SubtitleCounter > 0)

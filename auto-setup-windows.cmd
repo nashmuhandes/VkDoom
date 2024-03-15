@@ -19,7 +19,7 @@ goto aftercopyright
 ** Not guaranteed to work and your mileage will vary.
 **
 **---------------------------------------------------------------------------
-** Copyright 2023 Rachael Alexanderson and the GZDoom team
+** Copyright 2023-2024 Rachael Alexanderson and the GZDoom team
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -78,5 +78,5 @@ cmake -A x64 -S .. -B . ^
 cmake --build . --config RelWithDebInfo -- -maxcpucount -verbosity:minimal
 
 rem -- If successful, show the build
-if not errorlevel 1 if exist RelWithDebInfo\gzdoom.exe explorer.exe RelWithDebInfo
+if not errorlevel 1 if exist RelWithDebInfo\vkdoom.exe explorer.exe RelWithDebInfo
 

@@ -1205,7 +1205,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(DVisualThinker, SetTranslation, SetTranslation)
 
 static int IsFrozen(DVisualThinker * self)
 {
-	return (self->Level->isFrozen() && !(self->PT.flags & SPF_NOTIMEFREEZE));
+	return !!(self->Level->isFrozen() && !(self->PT.flags & SPF_NOTIMEFREEZE));
 }
 
 bool DVisualThinker::isFrozen()
@@ -1241,6 +1241,14 @@ int DVisualThinker::GetRenderStyle()
 	return PT.style;
 }
 
+float DVisualThinker::GetOffset(bool y) const // Needed for the renderer.
+{
+	if (y)
+		return (float)(bFlipOffsetY ? Offset.Y : -Offset.Y);
+	else
+		return (float)(bFlipOffsetX ? Offset.X : -Offset.X);
+}
+
 void DVisualThinker::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
@@ -1263,6 +1271,8 @@ void DVisualThinker::Serialize(FSerializer& arc)
 		("flipy", bYFlip)
 		("dontinterpolate", bDontInterpolate)
 		("addlightlevel", bAddLightLevel)
+		("flipoffsetx", bFlipOffsetX)
+		("flipoffsetY", bFlipOffsetY)
 		("lightlevel", LightLevel)
 		("flags", PT.flags);
 		
@@ -1288,3 +1298,5 @@ DEFINE_FIELD(DVisualThinker, bXFlip);
 DEFINE_FIELD(DVisualThinker, bYFlip);
 DEFINE_FIELD(DVisualThinker, bDontInterpolate);
 DEFINE_FIELD(DVisualThinker, bAddLightLevel);
+DEFINE_FIELD(DVisualThinker, bFlipOffsetX);
+DEFINE_FIELD(DVisualThinker, bFlipOffsetY);
