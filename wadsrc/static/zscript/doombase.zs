@@ -481,6 +481,11 @@ struct LevelLocals native
 	native bool nousersave;
 	native bool noautomap;
 
+	native Vector3 GetSunDirection();
+	native void SetSunDirection(Vector3 SunDir);
+	native Vector3 GetSunColor();
+	native void SetSunColor(Vector3 SunDir);
+
 	native String GetUDMFString(int type, int index, Name key);
 	native int GetUDMFInt(int type, int index, Name key);
 	native double GetUDMFFloat(int type, int index, Name key);

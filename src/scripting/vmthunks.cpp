@@ -2957,3 +2957,71 @@ DEFINE_FIELD(DBaseStatusBar, itemflashFade);
 
 
 DEFINE_GLOBAL(StatusBar);
+
+//==========================================================================
+//
+// LIGHTMAPPER SUN STUFF
+//
+//==========================================================================
+
+void GetSunDirection(FLevelLocals *Level, DVector3 *result)
+{
+	*result = DVector3(Level->SunDirection);
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, GetSunDirection, GetSunDirection)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(FLevelLocals);
+	DVector3 result;
+	GetSunDirection(self, &result);
+	ACTION_RETURN_VEC3(result);
+}
+
+void SetSunDirection(FLevelLocals *self, double x, double y, double z)
+{
+	self->SunDirection = FVector3(x, y, z);
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, SetSunDirection, SetSunDirection)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(FLevelLocals);
+	PARAM_FLOAT(x);
+	PARAM_FLOAT(y);
+	PARAM_FLOAT(z);
+	SetSunDirection(self, x, y, z);
+	return 0;
+}
+
+//==========================================================================
+//
+//
+//
+//==========================================================================
+
+void GetSunColor(FLevelLocals *Level, DVector3 *result)
+{
+	*result = DVector3(Level->SunColor);
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, GetSunColor, GetSunColor)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(FLevelLocals);
+	DVector3 result;
+	GetSunColor(self, &result);
+	ACTION_RETURN_VEC3(result);
+}
+
+void SetSunColor(FLevelLocals *self, double x, double y, double z)
+{
+	self->SunColor = FVector3(x, y, z);
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, SetSunColor, SetSunColor)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(FLevelLocals);
+	PARAM_FLOAT(x);
+	PARAM_FLOAT(y);
+	PARAM_FLOAT(z);
+	SetSunColor(self, x, y, z);
+	return 0;
+}
