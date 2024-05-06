@@ -466,21 +466,21 @@ bool HWSprite::CalculateVertices(HWDrawInfo* di, FVector3* v, DVector3* vp)
 	const bool useOffsets = (actor != nullptr) && !(actor->renderflags & RF_ROLLCENTER);
 
 	FVector2 offset = FVector2( offx, offy );
-
-	// Account for +ROLLCENTER flag. Takes the embedded image offsets and adds them in with SpriteOffsets.
-	if (drawRollSpriteActor && useOffsets)
-	{
-		offset.X += center.X - x;
-		offset.Y += center.Z - z;
-	}
-
+	float xx = -center.X + x;
+	float yy = -center.Y + y;
+	float zz = -center.Z + z;
 	// [Nash] check for special sprite drawing modes
 	if (drawWithXYBillboard || isWallSprite)
 	{
-		// Compute center of sprite
+		float pixelstretch = 1.2;
+		if (actor && actor->Level)
+			pixelstretch = actor->Level->pixelstretch;
+		else if (particle && particle->subsector && particle->subsector->sector && particle->subsector->sector->Level)
+			pixelstretch = particle->subsector->sector->Level->pixelstretch;
+
 		mat.MakeIdentity();
 		mat.Translate(center.X, center.Z, center.Y); // move to sprite center
-
+		mat.Scale(1.0, 1.0/pixelstretch, 1.0);	// unstretch sprite by level aspect ratio
 
 		// [MC] Sprite offsets.
 		if (!offset.isZero())
@@ -512,16 +512,21 @@ bool HWSprite::CalculateVertices(HWDrawInfo* di, FVector3* v, DVector3* vp)
 			mat.Rotate(0, 1, 0, 0);
 			if (drawRollSpriteActor)
 			{
+
+				if (useOffsets) mat.Translate(xx, zz, yy);
 				mat.Rotate(yawvecX, 0, yawvecY, rollDegrees);
+				if (useOffsets) mat.Translate(-xx, -zz, -yy);
 			}
 		}
 		else if (doRoll)
 		{
+			if (useOffsets) mat.Translate(xx, zz, yy);
 			if (drawWithXYBillboard)
 			{
 				mat.Rotate(-sin(angleRad), 0, cos(angleRad), -HWAngles.Pitch.Degrees());
 			}
 			mat.Rotate(cos(angleRad), 0, sin(angleRad), rollDegrees);
+			if (useOffsets) mat.Translate(-xx, -zz, -yy);
 		}
 		else if (drawWithXYBillboard)
 		{
@@ -531,6 +536,7 @@ bool HWSprite::CalculateVertices(HWDrawInfo* di, FVector3* v, DVector3* vp)
 			mat.Rotate(-sin(angleRad), 0, cos(angleRad), -HWAngles.Pitch.Degrees());
 		}
 
+		mat.Scale(1.0, pixelstretch, 1.0);	// stretch sprite by level aspect ratio
 		mat.Translate(-center.X, -center.Z, -center.Y); // retreat from sprite center
 
 		v[0] = mat * FVector3(x1, z1, y1);
@@ -554,7 +560,9 @@ bool HWSprite::CalculateVertices(HWDrawInfo* di, FVector3* v, DVector3* vp)
 				float rollDegrees = Angles.Roll.Degrees();
 
 				mat.Translate(center.X, center.Z, center.Y);
+				if (useOffsets) mat.Translate(xx, zz, yy);
 				mat.Rotate(cos(angleRad), 0, sin(angleRad), rollDegrees);
+				if (useOffsets) mat.Translate(-xx, -zz, -yy);
 				mat.Translate(-center.X, -center.Z, -center.Y);
 			}
 

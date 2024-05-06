@@ -12,6 +12,7 @@ class Inventory : Actor
 
 	private bool bSharingItem; // Currently being shared (avoid infinite recursions).
 	private bool pickedUp[MAXPLAYERS]; // If items are set to local, track who already picked it up.
+	private bool bCreatingCopy; // Tells GoAway that it needs to return true so a new copy of the item is spawned.
 
 	deprecated("3.7") private int ItemFlags;
 	Actor Owner;						// Who owns this item? NULL if it's still a pickup.
@@ -413,7 +414,10 @@ class Inventory : Actor
 	{
 		Inventory copy;
 
-		Amount = MIN(Amount, MaxAmount);
+		// Clamping this on local copy creation presents too many possible
+		// pitfalls (e.g. Health items).
+		if (!IsCreatingLocalCopy())
+			Amount = MIN(Amount, MaxAmount);
 		if (GoAway ())
 		{
 			copy = Inventory(Spawn (GetClass()));
@@ -835,9 +839,11 @@ class Inventory : Actor
 		Inventory give = self;
 		if (localPickUp)
 		{
-			give = Inventory(Spawn(GetClass()));
+			give = CreateLocalCopy(toucher);
 			if (!give)
 				return;
+
+			localPickUp = give != self;
 		}
 
 		bool res;
@@ -1043,6 +1049,9 @@ class Inventory : Actor
 
 	protected bool GoAway ()
 	{
+		if (IsCreatingLocalCopy())
+			return true;
+
 		// Dropped items never stick around
 		if (bDropped)
 		{
@@ -1112,6 +1121,22 @@ class Inventory : Actor
 		int pNum = client.PlayerNumber();
 		pickedUp[pNum] = true;
 		DisableLocalRendering(pNum, true);
+	}
+
+	// Force spawn a new version of the item. This needs to use CreateCopy so that
+	// any transferrable properties on the item get correctly set.
+	Inventory CreateLocalCopy(Actor client)
+	{
+		bCreatingCopy = true;
+		let item = CreateCopy(client);
+		bCreatingCopy = false;
+
+		return item;
+	}
+
+	protected clearscope bool IsCreatingLocalCopy() const
+	{
+		return bCreatingCopy;
 	}
 	
 	//===========================================================================

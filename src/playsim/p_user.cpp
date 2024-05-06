@@ -377,7 +377,7 @@ void player_t::SetLogNumber (int num)
 
 	// First look up TXT_LOGTEXT%d in the string table
 	mysnprintf(lumpname, countof(lumpname), "$TXT_LOGTEXT%d", num);
-	auto text = GStrings[lumpname+1];
+	auto text = GStrings.CheckString(lumpname+1);
 	if (text)
 	{
 		SetLogText(lumpname);	// set the label, not the content, so that a language change can be picked up.
@@ -395,7 +395,7 @@ void player_t::SetLogNumber (int num)
 			// If this is an original IWAD text, try looking up its lower priority string version first.
 
 			mysnprintf(lumpname, countof(lumpname), "$TXT_ILOG%d", num);
-			auto text = GStrings[lumpname + 1];
+			auto text = GStrings.CheckString(lumpname + 1);
 			if (text)
 			{
 				SetLogText(lumpname);	// set the label, not the content, so that a language change can be picked up.
@@ -423,7 +423,7 @@ void player_t::SetLogText (const char *text)
 	if (mo && mo->CheckLocalView())
 	{
 		// Print log text to console
-		Printf(PRINT_HIGH | PRINT_NONOTIFY, TEXTCOLOR_GOLD "%s\n", LogText[0] == '$' ? GStrings(text + 1) : text);
+		Printf(PRINT_HIGH | PRINT_NONOTIFY, TEXTCOLOR_GOLD "%s\n", LogText[0] == '$' ? GStrings.GetString(text + 1) : text);
 	}
 }
 
@@ -1279,6 +1279,7 @@ void P_PlayerThink (player_t *player)
 	player->cheats &= ~CF_INTERPVIEWANGLES;
 	player->cheats &= ~CF_SCALEDNOLERP;
 	player->cheats &= ~CF_NOFOVINTERP;
+	player->cheats &= ~CF_NOVIEWPOSINTERP;
 	player->mo->FloatVar("prevBob") = player->bob;
 
 	IFVIRTUALPTRNAME(player->mo, NAME_PlayerPawn, PlayerThink)
