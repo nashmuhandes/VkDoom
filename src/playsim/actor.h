@@ -501,6 +501,8 @@ enum ActorRenderFlag2
 	RF2_FLIPSPRITEOFFSETX		= 0x0010,
 	RF2_FLIPSPRITEOFFSETY		= 0x0020,
 	RF2_CAMFOLLOWSPLAYER		= 0x0040,	// Matches the cam's base position and angles to the main viewpoint.
+	RF2_INTERPOLATESCALE		= 0x0100,	// allow interpolation of actor's scale
+	RF2_INTERPOLATEALPHA		= 0x0200,	// allow interpolation of actor's alpha
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -1361,6 +1363,8 @@ public:
 	// [RH] Used to interpolate the view to get >35 FPS
 	DVector3 Prev;
 	DRotator PrevAngles;
+	FVector2 PrevScale;
+	float PrevAlpha;
 	DAngle   PrevFOV;
 	TArray<FDynamicLight *> AttachedLights;
 	TDeletingArray<FLightDefaults *> UserLights;
@@ -1519,6 +1523,53 @@ public:
 			return viewangle - (thisang + SpriteRotation);
 		}
 	}
+	DVector2 GetSpriteScale(double ticFrac)
+	{
+		if(renderflags2 & RF2_INTERPOLATESCALE)
+		{
+			DVector2 prev(PrevScale.X, PrevScale.Y);
+			return prev + (ticFrac * (DVector2(Scale.X, Scale.Y) - prev));
+		}
+		else
+		{
+			return DVector2(Scale.X, Scale.Y);
+		}
+	}
+	FVector2 GetSpriteScaleF(double ticFrac)
+	{
+		FVector2 scale(float(Scale.X), float(Scale.Y));
+		if (renderflags2 & RF2_INTERPOLATESCALE)
+		{
+			return PrevScale + (float(ticFrac) * (scale - PrevScale));
+		}
+		else
+		{
+			return scale;
+		}
+	}
+	double GetAlpha(double ticFrac) const
+	{
+		if (renderflags2 & RF2_INTERPOLATEALPHA)
+		{
+			return double(PrevAlpha) + (ticFrac * (Alpha - double(PrevAlpha)));
+		}
+		else
+		{
+			return Alpha;
+		}
+	}
+	float GetAlphaF(double ticFrac) const
+	{
+		if (renderflags2 & RF2_INTERPOLATEALPHA)
+		{
+			return PrevAlpha + float(ticFrac * (Alpha - double(PrevAlpha)));
+		}
+		else
+		{
+			return float(Alpha);
+		}
+	}
+
 	DVector3 PosPlusZ(double zadd) const
 	{
 		return { X(), Y(), Z() + zadd };

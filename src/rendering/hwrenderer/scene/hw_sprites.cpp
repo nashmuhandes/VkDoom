@@ -822,7 +822,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	const auto &vp = di->Viewpoint;
 	AActor *camera = vp.camera;
 
-	if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->Alpha))
+	if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->GetAlpha(vp.TicFrac)))
 	{
 		if (!(thing->flags & MF_STEALTH) || !di->isStealthVision() || thing == camera)
 			return;
@@ -835,7 +835,8 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 		return;
 
 	int spritenum = thing->sprite;
-	DVector2 sprscale(thing->Scale.X, thing->Scale.Y);
+	DVector2 sprscale = thing->GetSpriteScale(vp.TicFrac);
+
 	if (thing->player != nullptr)
 	{
 		P_CheckPlayerSprite(thing, spritenum, sprscale);
@@ -1195,7 +1196,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	translation = thing->Translation;
 
 	OverrideShader = -1;
-	trans = thing->Alpha;
+	trans = thing->GetAlpha(vp.TicFrac);
 	hw_styleflags = STYLEHW_Normal;
 
 	if (RenderStyle.BlendOp >= STYLEOP_Fuzz && RenderStyle.BlendOp <= STYLEOP_FuzzOrRevSub)

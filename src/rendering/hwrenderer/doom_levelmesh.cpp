@@ -378,14 +378,12 @@ void DoomLevelMesh::UpdateSide(FLevelLocals& doomMap, unsigned int sideIndex)
 
 	CreateWallSurface(side, disp, state, result.portals, true, false);
 
-	/*
 	// final pass: translucent stuff
 	state.AlphaFunc(Alpha_GEqual, gl_mask_sprite_threshold);
 	state.SetRenderStyle(STYLE_Translucent);
 	CreateWallSurface(side, disp, state, result.translucent, false, true);
 	state.AlphaFunc(Alpha_GEqual, 0.f);
 	state.SetRenderStyle(STYLE_Normal);
-	*/
 }
 
 void DoomLevelMesh::UpdateFlat(FLevelLocals& doomMap, unsigned int sectorIndex)

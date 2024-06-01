@@ -1728,7 +1728,6 @@ FxExpression *FxFontCast::Resolve(FCompileContext &ctx)
 	}
 }
 
-
 //==========================================================================
 //
 // generic type cast operator

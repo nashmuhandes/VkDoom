@@ -994,7 +994,7 @@ namespace swrenderer
 		if (thing == nullptr ||
 			(thing->renderflags & RF_INVISIBLE) ||
 			(thing->renderflags & RF_MAYBEINVISIBLE) ||
-			!thing->RenderStyle.IsVisible(thing->Alpha) ||
+			!thing->RenderStyle.IsVisible(thing->GetAlpha(r_viewpoint.TicFrac)) ||
 			!thing->IsVisibleToPlayer() ||
 			!thing->IsInsideVisibleAngles())
 		{
@@ -1050,7 +1050,7 @@ namespace swrenderer
 		sprite.spritenum = thing->sprite;
 		sprite.tex = nullptr;
 		sprite.voxel = nullptr;
-		sprite.spriteScale = DVector2(thing->Scale.X, thing->Scale.Y);
+		sprite.spriteScale = thing->GetSpriteScale(Thread->Viewport->viewpoint.TicFrac);
 		sprite.renderflags = thing->renderflags;
 
 		if (thing->player != nullptr)

@@ -3,6 +3,8 @@
 #include "jitintern.h"
 #include "printf.h"
 
+#include <unordered_map>
+
 extern PString *TypeString;
 extern PStruct *TypeVector2;
 extern PStruct *TypeVector3;
@@ -374,14 +376,32 @@ void JitCompiler::SetupSimpleFrame()
 		I_FatalError("JIT: inconsistent number of %s for function %s", errorDetails, sfunc->PrintableName);
 	}
 
-	for (int i = regd; i < sfunc->NumRegD; i++)
-		cc.xor_(regD[i], regD[i]);
+	// This is bad code created to supress other bad code
+	{
+		std::vector<asmjit::X86Gp> map;
 
-	for (int i = regf; i < sfunc->NumRegF; i++)
-		cc.xorpd(regF[i], regF[i]);
+		for (int i = regd; i < sfunc->NumRegD; i++)
+			if (std::find_if(map.begin(), map.end(), [&](const asmjit::X86Gp& a) { return a.getId() == regD[i].getId(); }) == map.end())
+				map.push_back(regD[i]);
 
-	for (int i = rega; i < sfunc->NumRegA; i++)
-		cc.xor_(regA[i], regA[i]);
+		for (int i = rega; i < sfunc->NumRegA; i++)
+			if (std::find_if(map.begin(), map.end(), [&](const asmjit::X86Gp& a) { return a.getId() == regA[i].getId(); }) == map.end())
+				map.push_back(regA[i]);
+
+		for (auto e : map)
+			cc.xor_(e, e);
+	}
+
+	{
+		std::vector<asmjit::X86Xmm> map;
+
+		for (int i = regf; i < sfunc->NumRegF; i++)
+			if (std::find_if(map.begin(), map.end(), [&](const asmjit::X86Xmm& a) { return a.getId() == regF[i].getId(); }) == map.end())
+				map.push_back(regF[i]);
+
+		for (auto e : map)
+			cc.xorpd(e, e);
+	}
 }
 
 static VMFrameStack *CreateFullVMFrame(VMScriptFunction *func, VMValue *args, int numargs)

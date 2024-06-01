@@ -41,7 +41,7 @@ const char *GetVersionString();
 
 /** Lots of different version numbers **/
 
-#define VERSIONSTR "1.0pre"
+#define VERSIONSTR "mad-4.11pre vkdoom-1.0pre"
 
 // The version as seen in the Windows resource
 #define RC_FILEVERSION 1,0,9999,0
@@ -97,19 +97,19 @@ const char *GetVersionString();
 #define SAVEVER 4560
 
 // This is so that derivates can use the same savegame versions without worrying about engine compatibility
-#define GAMESIG "VKDOOM"
+#define GAMESIG "MAD-VKDOOM"
 #define BASEWAD "vkdoom.pk3"
+
 #define OPTIONALWAD "game_support.pk3"
 #define GZDOOM 1
 #define VR3D_ENABLED
 
 // More stuff that needs to be different for derivatives.
-#define GAMENAME "VKDoom"
-#define WGAMENAME L"VKDoom"
-#define GAMENAMELOWERCASE "vkdoom"
-#define QUERYIWADDEFAULT true
-//#define FORUM_URL "http://forum.zdoom.org/"
-//#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
+#define GAMENAME "Bruga-VKDoom"
+#define WGAMENAME L"Bruga-VKDoom"
+#define GAMENAMELOWERCASE "bruga-vkdoom"
+#define FORUM_URL "http://forum.zdoom.org/"
+#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
 // For QUERYIWADDEFAULT: Set to 'true' to always show dialog box on startup by default, 'false' to disable.
 // Should set to 'false' for standalone games, and set to 'true' for regular source port forks that are meant to run any game.
 
