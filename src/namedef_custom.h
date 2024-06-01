@@ -855,7 +855,7 @@ xx(Sky)
 xx(Pagename)
 
 // Lightmap/ZDRay keywords
-xx(lm_sampledist)
+xx(lm_sampledist_line)
 xx(lm_sampledist_top)
 xx(lm_sampledist_mid)
 xx(lm_sampledist_bot)
@@ -863,6 +863,7 @@ xx(lm_sampledist_floor)
 xx(lm_sampledist_ceiling)
 xx(lm_dynamic)
 xx(lm_suncolor)
+xx(lm_sampledist)
 
 // Light keywords
 xx(SourceRadius)
