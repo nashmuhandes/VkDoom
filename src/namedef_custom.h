@@ -659,6 +659,7 @@ xx(Midtex3dimpassible)
 xx(Revealed)
 xx(AutomapStyle)
 xx(DrawFullHeight)
+xx(Clipsegs)
 
 xx(Playercross)
 xx(Playeruse)

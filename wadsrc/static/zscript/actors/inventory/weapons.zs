@@ -9,6 +9,7 @@ class Weapon : StateProvider
 
 	const ZOOM_INSTANT = 1;
 	const ZOOM_NOSCALETURNING = 2;
+	const ZOOM_INTERPOLATE = 4;
 	
 	deprecated("3.7") uint WeaponFlags;		// not to be used directly.
 	class<Ammo> AmmoType1, AmmoType2;		// Types of ammo used by self weapon
@@ -469,8 +470,7 @@ class Weapon : StateProvider
 			zoom = 1 / clamp(zoom, 0.1, 50.0);
 			if (flags & 1)
 			{ // Make the zoom instant.
-				player.FOV = player.DesiredFOV * zoom;
-				player.cheats |= CF_NOFOVINTERP;
+				player.prevFOV = player.FOV = player.DesiredFOV * zoom;
 			}
 			if (flags & 2)
 			{ // Disable pitch/yaw scaling.

@@ -385,6 +385,9 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(RF2, FLIPSPRITEOFFSETY, AActor, renderflags2),
 	DEFINE_FLAG(RF2, CAMFOLLOWSPLAYER, AActor, renderflags2),
 
+	DEFINE_FLAG(RF2, INTERPOLATESCALE, AActor, renderflags2),
+	DEFINE_FLAG(RF2, INTERPOLATEALPHA, AActor, renderflags2),
+
 	// Bounce flags
 	DEFINE_FLAG2(BOUNCE_Walls, BOUNCEONWALLS, AActor, BounceFlags),
 	DEFINE_FLAG2(BOUNCE_Floors, BOUNCEONFLOORS, AActor, BounceFlags),

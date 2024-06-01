@@ -873,9 +873,16 @@ private:
 		if (Count != 0)
 		{
 			Array = (T *)M_Malloc (sizeof(T)*Most);
-			for (unsigned int i = 0; i < Count; ++i)
+			if constexpr (std::is_trivially_copyable_v<T>)
 			{
-				::new(&Array[i]) T(other.Array[i]);
+				memcpy(Array, other.Array, sizeof(T) * Count);
+			}
+			else
+			{
+				for (unsigned int i = 0; i < Count; ++i)
+				{
+					::new(&Array[i]) T(other.Array[i]);
+				}
 			}
 		}
 		else
@@ -892,10 +899,13 @@ private:
 
 	void DoDelete (unsigned int first, unsigned int last)
 	{
-		assert (last != ~0u);
-		for (unsigned int i = first; i <= last; ++i)
+		if constexpr (std::is_trivially_destructible<T>::value == false)
 		{
-			Array[i].~T();
+			assert(last != ~0u);
+			for (unsigned int i = first; i <= last; ++i)
+			{
+				Array[i].~T();
+			}
 		}
 	}
 

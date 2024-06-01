@@ -41,7 +41,7 @@ const char *GetVersionString();
 
 /** Lots of different version numbers **/
 
-#define VERSIONSTR "1.0pre"
+#define VERSIONSTR "mad-4.11pre vkdoom-1.0pre"
 
 // The version as seen in the Windows resource
 #define RC_FILEVERSION 1,0,9999,0
@@ -97,18 +97,19 @@ const char *GetVersionString();
 #define SAVEVER 4560
 
 // This is so that derivates can use the same savegame versions without worrying about engine compatibility
-#define GAMESIG "VKDOOM"
+#define GAMESIG "MAD-VKDOOM"
 #define BASEWAD "vkdoom.pk3"
+
 #define OPTIONALWAD "game_support.pk3"
 #define GZDOOM 1
 #define VR3D_ENABLED
 
 // More stuff that needs to be different for derivatives.
-#define GAMENAME "VKDoom"
-#define WGAMENAME L"VKDoom"
-#define GAMENAMELOWERCASE "vkdoom"
-//#define FORUM_URL "http://forum.zdoom.org/"
-//#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
+#define GAMENAME "MAD-VKDoom"
+#define WGAMENAME L"MAD-VKDoom"
+#define GAMENAMELOWERCASE "mad-vkdoom"
+#define FORUM_URL "http://forum.zdoom.org/"
+#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
 
 #if defined(__APPLE__) || defined(_WIN32)
 #define GAME_DIR GAMENAME

@@ -1431,7 +1431,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_SetRenderStyle)
 	PARAM_FLOAT(alpha);
 	PARAM_INT(mode);
 
-	self->Alpha = clamp(alpha, 0., 1.);
+	self->PrevAlpha = float(self->Alpha = clamp(alpha, 0., 1.));
 	self->RenderStyle = ERenderStyle(mode);
 	return 0;
 }

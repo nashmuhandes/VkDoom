@@ -805,7 +805,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_OverlayScale)
 	PARAM_FLOAT(wy)
 	PARAM_INT(flags)
 	
-	if (!ACTION_CALL_FROM_PSPRITE() || ((flags & WOF_KEEPX) && (flags & WOF_KEEPY)))
+	if ((layer == 0 && !ACTION_CALL_FROM_PSPRITE()) || ((flags & WOF_KEEPX) && (flags & WOF_KEEPY)))
 		return 0;
 
 	DPSprite *pspr = self->player->FindPSprite(((layer != 0) ? layer : stateinfo->mPSPIndex));
@@ -837,7 +837,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_OverlayRotate)
 	PARAM_ANGLE(degrees)
 	PARAM_INT(flags)
 
-	if (!ACTION_CALL_FROM_PSPRITE())
+	if (layer == 0 && !ACTION_CALL_FROM_PSPRITE())
 		return 0;
 
 	DPSprite *pspr = self->player->FindPSprite(((layer != 0) ? layer : stateinfo->mPSPIndex));
@@ -865,7 +865,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_OverlayPivot)
 	PARAM_FLOAT(wy)
 	PARAM_INT(flags)
 
-	if (!ACTION_CALL_FROM_PSPRITE() || ((flags & WOF_KEEPX) && (flags & WOF_KEEPY)))
+	if ((layer == 0 && !ACTION_CALL_FROM_PSPRITE()) || ((flags & WOF_KEEPX) && (flags & WOF_KEEPY)))
 		return 0;
 
 	DPSprite *pspr = self->player->FindPSprite(((layer != 0) ? layer : stateinfo->mPSPIndex));
@@ -985,7 +985,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_OverlayPivotAlign)
 	PARAM_INT(halign);
 	PARAM_INT(valign);
 
-	if (!ACTION_CALL_FROM_PSPRITE())
+	if (layer == 0 && !ACTION_CALL_FROM_PSPRITE())
 		return 0;
 
 	DPSprite *pspr = self->player->FindPSprite(((layer != 0) ? layer : stateinfo->mPSPIndex));

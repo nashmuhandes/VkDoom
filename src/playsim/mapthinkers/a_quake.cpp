@@ -26,6 +26,7 @@
 #include "doomtype.h"
 #include "doomstat.h"
 #include "p_local.h"
+#include "actorinlines.h"
 #include "actor.h"
 #include "a_sharedglobal.h"
 #include "serializer.h"

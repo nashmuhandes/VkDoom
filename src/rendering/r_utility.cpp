@@ -816,6 +816,9 @@ void R_AddInterpolationPoint(const DVector3a &vec)
 
 static double QuakePower(double factor, double intensity, double offset)
 { 
+	double phase = 0;
+	double phaseMul = 1.0;
+
 	double randumb;
 	if (intensity == 0)
 	{
@@ -823,8 +826,10 @@ static double QuakePower(double factor, double intensity, double offset)
 	}
 	else
 	{
-		randumb = pr_torchflicker.GenRand_Real2() * (intensity * 2) - intensity;
+		randumb = sin((r_viewpoint.TicFrac + gametic + phase) * phaseMul) * cos((r_viewpoint.TicFrac + gametic + phase + 0.7) * phaseMul * 0.333) * intensity;
+		//pr_torchflicker.GenRand_Real2() * (intensity * 2) - intensity;
 	}
+
 	return factor * (offset + randumb);
 }
 
