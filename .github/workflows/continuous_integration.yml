@@ -73,7 +73,7 @@ jobs:
           wget -q "https://github.com/coelckers/gzdoom/releases/download/ci_deps/${ZMUSIC_PACKAGE}"
           tar -xf "${ZMUSIC_PACKAGE}"
         fi
-    
+
     - name: Configure
       shell: bash
       run: |
@@ -85,71 +85,71 @@ jobs:
         export MAKEFLAGS=--keep-going
         cmake --build build --config ${{ matrix.config.build_type }} --parallel 3
 
-    - name: Create Package
-      if: (runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12') && matrix.config.build_type == 'RelWithDebInfo'
-      shell: bash
-      run: |
-        cd build
-        mkdir package
-        if [[ "${{ runner.os }}" == 'Windows' ]]; then
-          cp -r ${{ matrix.config.build_type }}/vkdoom.exe ${{ matrix.config.build_type }}/vktool.exe ${{ matrix.config.build_type }}/*.pk3 ${{ matrix.config.build_type }}/fm_banks ${{ matrix.config.build_type }}/soundfonts package
-          cp ../bin/licenses.zip ../bin/windows/libsndfile/64bit/libsndfile-1.dll ../bin/windows/openal/64bit/openal32.dll ../bin/windows/zmusic/64bit/zmusic.dll package
-          cp ${{ matrix.config.build_type }}/vkdoom-stripped.pdb package/vkdoom.pdb
-          cp ${{ matrix.config.build_type }}/vkdoom-stripped.pdb package/vktool.pdb
-        elif [[ "${{ runner.os }}" == 'macOS' ]]; then
-          cp -r vkdoom.app package
-          cp -r vktool package
-        elif [[ "${{ runner.os }}" == 'Linux' ]]; then
-          cp vkdoom vktool *.pk3 zmusic/lib/libzmusic.so package
-          strip package/vkdoom
-          strip package/vktool
-        fi
-
-    - name: Upload Package
-      if: runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12'
-      uses: actions/upload-artifact@v4
-      with:
-        path: build/package
-        name: ${{ matrix.config.name }} ${{ matrix.config.build_type }}
-
-    - name: List Build Directory
-      if: always()
-      shell: bash
-      run: |
-        git status
-        ls -lR build
-
-  deploy:
-    name: Update Latest successful build
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Download Windows artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Visual Studio 2022 RelWithDebInfo
-        path: build/vkdoom-windows-prerelease
-
-    - name: Download Linux artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Linux GCC 12 RelWithDebInfo
-        path: build/vkdoom-linux-prerelease
-
-    - name: Zip artifacts
-      shell: bash
-      run: |
-        cd build
-        zip -r vkdoom-windows-prerelease.zip vkdoom-windows-prerelease
-        zip -r vkdoom-linux-prerelease.zip vkdoom-linux-prerelease
-
-    - name: Update nightly release
-      uses: pyTooling/Actions/releaser@r0
-      with:
-        tag: nightly
-        rm: true
-        token: ${{ secrets.GITHUB_TOKEN }}
-        files: build/vkdoom-windows-prerelease.zip build/vkdoom-linux-prerelease.zip
+#   - name: Create Package
+#     if: (runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12') && matrix.config.build_type == 'RelWithDebInfo'
+#     shell: bash
+#     run: |
+#       cd build
+#       mkdir package
+#       if [[ "${{ runner.os }}" == 'Windows' ]]; then
+#         cp -r ${{ matrix.config.build_type }}/vkdoom.exe ${{ matrix.config.build_type }}/vktool.exe ${{ matrix.config.build_type }}/*.pk3 ${{ matrix.config.build_type }}/fm_banks ${{ matrix.config.build_type }}/soundfonts package
+#         cp ../bin/licenses.zip ../bin/windows/libsndfile/64bit/libsndfile-1.dll ../bin/windows/openal/64bit/openal32.dll ../bin/windows/zmusic/64bit/zmusic.dll package
+#         cp ${{ matrix.config.build_type }}/vkdoom-stripped.pdb package/vkdoom.pdb
+#         cp ${{ matrix.config.build_type }}/vkdoom-stripped.pdb package/vktool.pdb
+#       elif [[ "${{ runner.os }}" == 'macOS' ]]; then
+#         cp -r vkdoom.app package
+#         cp -r vktool package
+#       elif [[ "${{ runner.os }}" == 'Linux' ]]; then
+#         cp vkdoom vktool *.pk3 zmusic/lib/libzmusic.so package
+#         strip package/vkdoom
+#         strip package/vktool
+#       fi
+#
+#   - name: Upload Package
+#     if: runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12'
+#     uses: actions/upload-artifact@v4
+#     with:
+#       path: build/package
+#       name: ${{ matrix.config.name }} ${{ matrix.config.build_type }}
+#
+#   - name: List Build Directory
+#     if: always()
+#     shell: bash
+#     run: |
+#       git status
+#       ls -lR build
+#
+# deploy:
+#   name: Update Latest successful build
+#   runs-on: ubuntu-latest
+#   needs: build
+#   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+#
+#   steps:
+#   - name: Download Windows artifact
+#     uses: actions/download-artifact@v4
+#     with:
+#       name: Visual Studio 2022 RelWithDebInfo
+#       path: build/vkdoom-windows-prerelease
+#
+#   - name: Download Linux artifact
+#     uses: actions/download-artifact@v4
+#     with:
+#       name: Linux GCC 12 RelWithDebInfo
+#       path: build/vkdoom-linux-prerelease
+#
+#   - name: Zip artifacts
+#     shell: bash
+#     run: |
+#       cd build
+#       zip -r vkdoom-windows-prerelease.zip vkdoom-windows-prerelease
+#       zip -r vkdoom-linux-prerelease.zip vkdoom-linux-prerelease
+#
+#   - name: Update nightly release
+#     uses: pyTooling/Actions/releaser@r0
+#     with:
+#       tag: nightly
+#       rm: true
+#       token: ${{ secrets.GITHUB_TOKEN }}
+#       files: build/vkdoom-windows-prerelease.zip build/vkdoom-linux-prerelease.zip
 
