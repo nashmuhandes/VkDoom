@@ -280,7 +280,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 		pipelineKey.ShaderKey.Layout.Simple3D = mWireframe; // simple notexture drawing for wireframe
 	}
 
-	int uTextureMode = GetTextureModeAndFlags((mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas()) ? TM_OPAQUE : TM_NORMAL);
+	int uTextureMode = GetTextureModeAndFlags((mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas() && !mMaterial.mMaterial->Source()->GetTranslucency()) ? TM_OPAQUE : TM_NORMAL);
 	pipelineKey.ShaderKey.TextureMode = uTextureMode & 0xffff;
 	pipelineKey.ShaderKey.ClampY = (uTextureMode & TEXF_ClampY) != 0;
 	pipelineKey.ShaderKey.Brightmap = (uTextureMode & TEXF_Brightmap) != 0;

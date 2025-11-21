@@ -202,7 +202,6 @@ FMaterial::FMaterial(FGameTexture * tx, int scaleflags)
 
 	mTextureLayers.ShrinkToFit();
 	tx->Material[scaleflags] = this;
-	if (tx->isHardwareCanvas()) tx->SetTranslucent(false);
 }
 
 //===========================================================================
