@@ -29,12 +29,6 @@ jobs:
           deps_cmdline: brew install libvpx
           build_type: Debug
 
-        - name: Linux GCC 9
-          os: ubuntu-22.04
-          extra_options: -DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9
-          deps_cmdline: sudo apt update && sudo apt install libsdl2-dev libvpx-dev libgtk2.0-dev libwebp-dev
-          build_type: MinSizeRel
-
         - name: Linux GCC 12
           os: ubuntu-22.04
           extra_options: -DCMAKE_C_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12
